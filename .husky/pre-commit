@@ -1,0 +1,21 @@
+# #!/usr/bin/env sh
+# . "$(dirname -- "$0")/_/husky.sh"
+
+# npx lint-staged
+
+
+echo "Running pre-commit hook..."
+
+# Run spell check
+git diff --cached --name-only | npx cspell "src/**/*.ts" --no-summary --no-progress --no-must-find-files --file-list stdin
+
+
+# Lint staged files
+npx lint-staged
+
+# Build
+npm run build
+
+# Bump patch version without git tagging
+npm version patch --no-git-tag-version
+git add package.json

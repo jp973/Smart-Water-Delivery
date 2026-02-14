@@ -1,0 +1,22 @@
+{
+  "development": {
+    "PORT": 7002,
+    "SWAGGER_URLS": "https://dev1.exeloncircuits.com,http://localhost:7003",
+    "OTP_EXPIRY": 10,
+    "ACCESS_TOKEN_EXPIRY": 43200,
+    "REFRESH_TOKEN_EXPIRY": 5256000,
+    "MONGODB_URI": "mongodb://localhost:27017/exeloncircuits",
+    "DEMO_MONGODB_URI": "mongodb://localhost:27017/exeloncircuits_demo",
+    "STORAGE_SERVICE": "S3",
+    "S3_REGION": "ap-south-1",
+    "S3_BUCKET": "developmentexelon",
+    "SIGNEDURL_EXPIRY": 10,
+    "SEED": {
+      "SUPER_ADMIN": {
+        "EMAIL": "admin@gmail.com",
+        "NAME": "SUPERADMIN",
+        "PASSWORD": "Admin@123"
+      }
+    }
+  }
+}
