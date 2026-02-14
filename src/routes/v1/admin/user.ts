@@ -344,7 +344,9 @@ router.get(
  *             project:
  *               _id: 1
  *               name: 1
- *             filters: {}
+ *             filters:
+ *               isEnabled: true
+ *               waterQuantity: 20
  *             search:
  *               - term: ""
  *                 fields: ["name"]
@@ -370,6 +372,7 @@ router.get(
  *                   properties:
  *                     totalCount:
  *                       type: integer
+ *                       example: 6
  *                     tableData:
  *                       type: array
  *                       items:
@@ -377,19 +380,85 @@ router.get(
  *                         properties:
  *                           _id:
  *                             type: string
+ *                             example: "698f7dcfa9b153542b31e653"
  *                           name:
  *                             type: string
+ *                             example: "jayyu"
  *                           phone:
  *                             type: string
+ *                             example: "7338198918"
  *                           countryCode:
  *                             type: string
+ *                             example: "91"
+ *                           address:
+ *                             type: object
+ *                             properties:
+ *                               houseNo:
+ *                                 type: string
+ *                                 example: "123"
+ *                               street:
+ *                                 type: string
+ *                                 example: "Main St"
+ *                               area:
+ *                                 type: string
+ *                                 example: "698e06ddd2753dd70a8ef994"
+ *                               city:
+ *                                 type: string
+ *                                 example: "Ahmedabad"
+ *                               pincode:
+ *                                 type: string
+ *                                 example: "380009"
+ *                               landmark:
+ *                                 type: string
+ *                                 example: "Near Park"
+ *                           waterQuantity:
+ *                             type: number
+ *                             example: 40
+ *                           notes:
+ *                             type: string
+ *                             example: "Special instructions"
+ *                           isEnabled:
+ *                             type: boolean
+ *                             example: true
+ *                           isVerified:
+ *                             type: boolean
+ *                             example: false
+ *                           isDeleted:
+ *                             type: boolean
+ *                             example: false
+ *                           createdAt:
+ *                             type: string
+ *                             example: "2026-02-13T19:38:55.862Z"
+ *                           updatedAt:
+ *                             type: string
+ *                             example: "2026-02-13T19:38:55.862Z"
  *                           areaId:
  *                             type: object
  *                             properties:
  *                               _id:
  *                                 type: string
+ *                                 example: "698e06ddd2753dd70a8ef994"
  *                               name:
  *                                 type: string
+ *                                 example: "North Sector"
+ *                               description:
+ *                                 type: string
+ *                                 example: "Residential area in the north"
+ *                               city:
+ *                                 type: string
+ *                                 example: "Ahmedabad"
+ *                               pincode:
+ *                                 type: string
+ *                                 example: "380015"
+ *                               isDeleted:
+ *                                 type: boolean
+ *                                 example: false
+ *                               createdAt:
+ *                                 type: string
+ *                                 example: "2026-02-12T16:59:09.066Z"
+ *                               updatedAt:
+ *                                 type: string
+ *                                 example: "2026-02-12T17:18:31.885Z"
  *                 toastMessage:
  *                   type: string
  *                   nullable: true

@@ -65,6 +65,7 @@ export const getAllUserSchema = z.object({
             isEnabled: z.boolean().optional(),
             city: z.string().optional(),
             area: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+            waterQuantity: z.number().optional(),
         }).optional(),
         search: z.array(z.object({
             term: z.string().optional().default(""),

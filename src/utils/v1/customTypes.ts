@@ -41,6 +41,8 @@ export interface IArea {
   city: string;
   pincode: string;
   isDeleted?: boolean;
+  totalCustomer?: number;
+  totalLiters?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

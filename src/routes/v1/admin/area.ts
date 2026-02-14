@@ -389,7 +389,7 @@ router.get(
  *                         properties:
  *                           _id:
  *                             type: string
- *                             example: "64d2fa92e5b5f7765e4e13a2"
+ *                             example: "698e06ddd2753dd70a8ef994"
  *                           name:
  *                             type: string
  *                             example: "North Sector"
@@ -402,6 +402,21 @@ router.get(
  *                           pincode:
  *                             type: string
  *                             example: "380015"
+ *                           isDeleted:
+ *                             type: boolean
+ *                             example: false
+ *                           totalCustomer:
+ *                             type: number
+ *                             example: 6
+ *                           totalLiters:
+ *                             type: number
+ *                             example: 165
+ *                           createdAt:
+ *                             type: string
+ *                             example: "2026-02-12T16:59:09.066Z"
+ *                           updatedAt:
+ *                             type: string
+ *                             example: "2026-02-12T17:18:31.885Z"
  *                 toastMessage:
  *                   type: string
  *                   nullable: true

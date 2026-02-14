@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { FilterQuery, SortOrder, Types } from "mongoose";
+import { FilterQuery, SortOrder, Types, PipelineStage } from "mongoose";
 import { COLLECTIONS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
 import { IUserModel, IUser, IArea } from "../../../utils/v1/customTypes";
@@ -287,34 +287,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             query["address.area"] = new Types.ObjectId(areaId as string);
         }
 
-        // Handle complex search array
-        if (search && search.length > 0) {
-            const searchQueries: FilterQuery<IUserModel>[] = [];
-
-            search.forEach((s: SearchItem) => {
-                const { term, fields, startsWith, endsWith } = s;
-                if (term && fields && fields.length > 0) {
-                    let regexStr = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape regex
-                    if (startsWith) regexStr = `^${regexStr}`;
-                    if (endsWith) regexStr = `${regexStr}$`;
-                    const regex = new RegExp(regexStr, "i");
-
-                    const fieldQueries = fields.map((field: string) => ({
-                        [field]: { $regex: regex },
-                    }));
-
-                    if (fieldQueries.length > 0) {
-                        searchQueries.push({ $or: fieldQueries });
-                    }
-                }
-            });
-
-            if (searchQueries.length > 0) {
-                query.$and = searchQueries;
-            }
-        }
-
-        const pipeline: any[] = [
+        const pipeline: PipelineStage[] = [
             { $match: query },
             {
                 $lookup: {
@@ -326,6 +299,42 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             },
             { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
         ];
+
+        // Handle complex search array after lookup to support area fields
+        if (search && search.length > 0) {
+            const searchOrQueries: PipelineStage.Match["$match"][] = [];
+
+            search.forEach((s: SearchItem) => {
+                const { term, fields, startsWith, endsWith } = s;
+                if (term && fields && fields.length > 0) {
+                    let regexStr = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    if (startsWith) regexStr = `^${regexStr}`;
+                    if (endsWith) regexStr = `${regexStr}$`;
+                    const regex = new RegExp(regexStr, "i");
+
+                    fields.forEach((field: string) => {
+                        if (field === "waterQuantity") {
+                            // Support regex search on numeric waterQuantity
+                            searchOrQueries.push({
+                                $expr: {
+                                    $regexMatch: {
+                                        input: { $toString: "$waterQuantity" },
+                                        regex: regexStr,
+                                        options: "i"
+                                    }
+                                }
+                            } as any); // Cast as any for complex $expr in match
+                        } else {
+                            searchOrQueries.push({ [field]: { $regex: regex } });
+                        }
+                    });
+                }
+            });
+
+            if (searchOrQueries.length > 0) {
+                pipeline.push({ $match: { $or: searchOrQueries } });
+            }
+        }
 
         // Apply projection if provided (root level only for now to match find behavior)
         if (project && Object.keys(project).length > 0) {

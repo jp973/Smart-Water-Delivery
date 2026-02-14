@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { FilterQuery, SortOrder } from "mongoose";
+import { FilterQuery, SortOrder, PipelineStage } from "mongoose";
 import { COLLECTIONS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
 import { IArea } from "../../../utils/v1/customTypes";
@@ -241,7 +241,7 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
         const limit = typeof options.itemsPerPage === 'string' ? parseInt(options.itemsPerPage) : (options.itemsPerPage || 10);
         const skip = (page - 1) * limit;
 
-        const sort: { [key: string]: SortOrder } = {};
+        const sort: Record<string, 1 | -1> = {};
         if (options.sortBy && Array.isArray(options.sortBy)) {
             options.sortBy.forEach((field: string, index: number) => {
                 sort[field] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
@@ -250,11 +250,53 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
             sort.createdAt = -1;
         }
 
-        const data = await db.models[COLLECTIONS.AREA].find(query, project)
-            .sort(sort)
-            .skip(skip)
-            .limit(limit);
+        const pipeline: PipelineStage[] = [
+            { $match: query }
+        ];
 
+        // Handle Search (already added to query)
+
+        // Handle Sorting
+        pipeline.push({ $sort: sort });
+
+        // Handle Pagination (Apply after calculating stats if we want to skip/limit the results)
+        // However, we usually skip/limit the data but we also need totalCount.
+
+        // Lookup users for each area
+        pipeline.push({
+            $lookup: {
+                from: COLLECTIONS.USER,
+                localField: "_id",
+                foreignField: "address.area",
+                as: "users"
+            }
+        });
+
+        // Calculate stats
+        pipeline.push({
+            $addFields: {
+                totalCustomer: { $size: "$users" },
+                totalLiters: {
+                    $reduce: {
+                        input: "$users",
+                        initialValue: 0,
+                        in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+                    }
+                }
+            }
+        });
+
+        // Pagination and Projection
+        const dataPipeline = [...pipeline];
+        dataPipeline.push({ $skip: skip });
+        dataPipeline.push({ $limit: limit });
+        if (Object.keys(project).length > 0) {
+            dataPipeline.push({ $project: { ...project, users: 0 } });
+        } else {
+            dataPipeline.push({ $project: { users: 0 } });
+        }
+
+        const data = await db.models[COLLECTIONS.AREA].aggregate<IArea>(dataPipeline);
         const totalCount = await db.models[COLLECTIONS.AREA].countDocuments(query);
 
         req.apiStatus = {
