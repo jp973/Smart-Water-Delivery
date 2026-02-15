@@ -382,6 +382,12 @@ router.get(
  *                     totalCount:
  *                       type: integer
  *                       example: 3
+ *                     totalCustomers:
+ *                       type: string
+ *                       example: "8"
+ *                     totalLiters:
+ *                       type: string
+ *                       example: "225"
  *                     tableData:
  *                       type: array
  *                       items:

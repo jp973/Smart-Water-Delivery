@@ -299,12 +299,45 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
         const data = await db.models[COLLECTIONS.AREA].aggregate<IArea>(dataPipeline);
         const totalCount = await db.models[COLLECTIONS.AREA].countDocuments(query);
 
+        // Overall Summary Calculation
+        const summaryPipeline: PipelineStage[] = [
+            { $match: query },
+            {
+                $lookup: {
+                    from: COLLECTIONS.USER,
+                    localField: "_id",
+                    foreignField: "address.area",
+                    as: "users"
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCustomers: { $sum: { $size: "$users" } },
+                    totalLiters: {
+                        $sum: {
+                            $reduce: {
+                                input: "$users",
+                                initialValue: 0,
+                                in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+                            }
+                        }
+                    }
+                }
+            }
+        ];
+
+        const summaryResult = await db.models[COLLECTIONS.AREA].aggregate(summaryPipeline);
+        const summary = summaryResult[0] || { totalCustomers: 0, totalLiters: 0 };
+
         req.apiStatus = {
             isSuccess: true,
             message: "Areas fetched successfully",
             status: 200,
             data: {
                 totalCount,
+                totalCustomers: summary.totalCustomers.toString(),
+                totalLiters: summary.totalLiters.toString(),
                 tableData: data,
             },
             toastMessage: null,
