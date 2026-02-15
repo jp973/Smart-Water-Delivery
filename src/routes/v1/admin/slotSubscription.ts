@@ -8,11 +8,13 @@ import {
     getPendingExtraRequests,
     updateExtraRequestStatus,
     updateSubscriptionStatus,
+    getTodaySlots,
 } from "../../../controller/v1/admin/slotSubscription";
 import {
     getPendingExtraRequestsSchema,
     updateExtraRequestStatusSchema,
     updateSubscriptionStatusSchema,
+    getTodaySlotsSchema,
 } from "../../../schemas/v1/slot";
 
 const router = Router();
@@ -26,10 +28,10 @@ const router = Router();
 
 /**
  * @swagger
- * /v1/admin/slotSubscription/pendingExtraRequests:
+ * /v1/admin/dashboard/pendingExtraRequests:
  *   post:
  *     summary: Get all pending extra quantity requests
- *     tags: [Admin/SlotSubscription]
+ *     tags: [Admin/Dashboard]
  *     security:
  *       - adminBearerAuth: []
  *     requestBody:
@@ -126,11 +128,6 @@ const router = Router();
  *                         landmark: "Near Park"
  *                       waterQuantity: 40
  *                       notes: "Special instructions"
- *                       isEnabled: true
- *                       isVerified: false
- *                       isDeleted: false
- *                       createdAt: "2026-02-13T19:38:55.862Z"
- *                       updatedAt: "2026-02-13T19:38:55.862Z"
  *                     slotId:
  *                       _id: "69903b2d2a8d7e1dae1d2783"
  *                       date: "2026-02-14T00:00:00.000Z"
@@ -142,26 +139,14 @@ const router = Router();
  *                         description: "Residential area in the north"
  *                         city: "Ahmedabad"
  *                         pincode: "380015"
- *                         isDeleted: true
- *                         createdAt: "2026-02-12T16:59:09.066Z"
- *                         updatedAt: "2026-02-12T17:18:31.885Z"
  *                       capacity: 500
  *                       currentBookingsCount: 0
  *                       bookingCutoffTime: "2026-02-14T16:00:00.000Z"
  *                       status: "Available"
- *                       isActive: true
- *                       isDeleted: false
- *                       createdAt: "2026-02-14T09:06:53.861Z"
- *                       updatedAt: "2026-02-14T09:06:53.861Z"
  *                     quantity: 40
  *                     status: "Delivered"
  *                     extraQuantity: 20
  *                     extraRequestStatus: "Pending"
- *                     isActive: true
- *                     isDeleted: false
- *                     createdAt: "2026-02-14T09:06:53.913Z"
- *                     updatedAt: "2026-02-14T11:57:16.144Z"
- *                     deliveredAt: "2026-02-14T10:46:03.854Z"
  *               toastMessage: null
  */
 router.post(
@@ -176,10 +161,142 @@ router.post(
 
 /**
  * @swagger
- * /v1/admin/slot-subscription/update-extra-request-status/{id}:
+ * /v1/admin/dashboard/getTodaySlots:
+ *   post:
+ *     summary: Get all slots for today with booking progress
+ *     tags: [Admin/Dashboard]
+ *     security:
+ *       - adminBearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               filters:
+ *                 type: object
+ *                 example: {}
+ *               options:
+ *                 type: object
+ *                 properties:
+ *                   page:
+ *                     type: number
+ *                     example: 1
+ *                   itemsPerPage:
+ *                     type: number
+ *                     example: 10
+ *                   sortBy:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["startTime"]
+ *                   sortDesc:
+ *                     type: array
+ *                     items:
+ *                       type: boolean
+ *                     example: [false]
+ *               search:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     term:
+ *                       type: string
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     startsWith:
+ *                       type: boolean
+ *                     endsWith:
+ *                       type: boolean
+ *                 example: [{ "term": "Kora", "fields": ["area"], "startsWith": true, "endsWith": false }]
+ *               project:
+ *                 type: object
+ *                 example: { "capacity": 1, "customerBookedLiter": 1 }
+ *     responses:
+ *       200:
+ *         description: Today's slots fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 isSuccess:
+ *                   type: boolean
+ *                 status:
+ *                   type: number
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: number
+ *                     totalLitersToday:
+ *                       type: string
+ *                     totalCustomer:
+ *                       type: string
+ *                     tableData:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           date:
+ *                             type: string
+ *                           startTime:
+ *                             type: string
+ *                           endTime:
+ *                             type: string
+ *                           capacity:
+ *                             type: number
+ *                           customerBookedLiter:
+ *                             type: number
+ *                           progressPercentage:
+ *                             type: string
+ *                           allotted:
+ *                             type: number
+ *                           area:
+ *                             type: object
+ *             example:
+ *               isSuccess: true
+ *               status: 200
+ *               message: "Today's slots fetched successfully"
+ *               data:
+ *                 totalCount: 1
+ *                 totalLitersToday: "2,400"
+ *                 totalCustomer: "48"
+ *                 tableData:
+ *                   - _id: "69903b2d2a8d7e1dae1d2783"
+ *                     date: "2026-02-14T00:00:00.000Z"
+ *                     startTime: "2026-02-14T08:00:00.000Z"
+ *                     endTime: "2026-02-14T10:00:00.000Z"
+ *                     capacity: 500
+ *                     customerBookedLiter: 400
+ *                     progressPercentage: "80"
+ *                     allotted: 4
+ *                     area:
+ *                       _id: "698e06ddd2753dd70a8ef994"
+ *                       name: "Koramangala"
+ */
+router.post(
+    "/getTodaySlots",
+    entryPoint,
+    validate(getTodaySlotsSchema),
+    dbSelector,
+    adminAuthenticator,
+    getTodaySlots,
+    exitPoint
+);
+
+/**
+ * @swagger
+ * /v1/admin/dashboard/updateRequestStatus/{id}:
  *   put:
  *     summary: Approve or reject an extra quantity request
- *     tags: [Admin/SlotSubscription]
+ *     tags: [Admin/Dashboard]
  *     parameters:
  *       - in: path
  *         name: id
@@ -206,7 +323,7 @@ router.post(
  *         description: Subscription not found
  */
 router.put(
-    "/update-extra-request-status/:id",
+    "/updateRequestStatus/:id",
     entryPoint,
     validate(updateExtraRequestStatusSchema),
     dbSelector,
@@ -217,10 +334,10 @@ router.put(
 
 /**
  * @swagger
- * /v1/admin/slot-subscription/update-delivery-status/{id}:
+ * /v1/admin/dashboard/updateDeliveryStatus/{id}:
  *   put:
  *     summary: Update delivery status (Delivered or Missed)
- *     tags: [Admin/SlotSubscription]
+ *     tags: [Admin/Dashboard]
  *     parameters:
  *       - in: path
  *         name: id
@@ -247,7 +364,7 @@ router.put(
  *         description: Subscription not found
  */
 router.put(
-    "/update-delivery-status/:id",
+    "/updateDeliveryStatus/:id",
     entryPoint,
     validate(updateSubscriptionStatusSchema),
     dbSelector,

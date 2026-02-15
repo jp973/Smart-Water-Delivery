@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllConstants, generatePresignedPost, getSignedUrlController, getLocationData } from "../../../controller/v1/generic/index";
+import { getAllConstants, generatePresignedPost, getSignedUrlController, getLocationData, getAllPincodes } from "../../../controller/v1/generic/index";
 import { entryPoint } from "../../../middleware/entryPoint";
 import { exitPoint } from "../../../middleware/exitPoint";
 import { dbSelector } from "../../../middleware/dbSelector";
@@ -51,17 +51,16 @@ const router = Router();
  *                         REFRESH_TOKEN: "refreshtokens"
  *                         USER: "users"
  *                         OTP: "otps"
- *                         BLOG: "blogs"
- *                         SERVICE: "services"
- *                         ENQUIRY: "enquiries"
- *                         TESTIMONIAL: "testimonials"
+ *                         ADMIN: "admins"
+ *                         AREA: "areas"
+ *                         SLOT: "slots"
+ *                         SLOT_SUBSCRIPTION: "slotSubscriptions"
  *                     USER_ROLES:
  *                       type: object
  *                       description: User role types
  *                       example:
- *                         SUPER_ADMIN: "SUPER_ADMIN"
- *                         ADMIN: "ADMIN"
- *                         USER: "USER"
+ *                         USER: "user"
+ *                         ADMIN: "admin"
  *                     ENVIRONMENT:
  *                       type: object
  *                       description: Environment types
@@ -69,69 +68,35 @@ const router = Router();
  *                         PRODUCTION: "PROD"
  *                         STAGED: "STAGE"
  *                         DEVELOPMENT: "DEV"
- *                     UserType:
- *                       type: object
- *                       description: User types
- *                       example:
- *                         ADMIN: "ADMIN"
- *                         USER: "USER"
- *                     Actions:
- *                       type: object
- *                       description: Action types
- *                       example:
- *                         ADD: "add"
- *                         UPDATE: "update"
- *                         DELETE: "delete"
- *                         READ: "read"
- *                     ENQUIRY_TYPES:
- *                       type: object
- *                       description: Enquiry type options
- *                       example:
- *                         GENERAL: "general"
- *                         PARTNER: "partner"
- *                         SERVICE: "service"
- *                     MEMBER_TYPES:
- *                       type: object
- *                       description: Member type options
- *                       example:
- *                         GENERAL: "General"
- *                         EX_SERVICE_MEN: "Ex-service men"
- *                     SERVICE_CATEGORIES:
- *                       type: array
- *                       description: Service categories with their sub-services
- *                       example:
- *                         - category: "Well Being"
- *                           services:
- *                             - "Elderly Care"
- *                             - "Bedridden Patient Care"
  *                     CONSTANTS:
  *                       type: object
  *                       description: Application constants
  *                       example:
  *                         MONGODB_RECONNECT_INTERVAL: 5000
- *                     MINIMUM_RATINGS:
- *                       type: array
- *                       description: Available minimum rating filter options
- *                       items:
- *                         type: object
- *                         properties:
- *                           value:
- *                             type: number
- *                             description: Rating value
- *                             example: 4.5
- *                           label:
- *                             type: string
- *                             description: Display label for the rating
- *                             example: "4.5 & above"
+ *                         MIN_RESEND_INTERVAL_IN_SECONDS: 60
+ *                     SUBSCRIPTION_STATUS:
+ *                       type: object
+ *                       description: Subscription status options
  *                       example:
- *                         - value: 4.5
- *                           label: "4.5 & above"
- *                         - value: 4
- *                           label: "4 & above"
- *                         - value: 3.5
- *                           label: "3.5 & above"
- *                         - value: 2.5
- *                           label: "2.5 & above"
+ *                         BOOKED: "Booked"
+ *                         DELIVERED: "Delivered"
+ *                         CANCELLED: "Cancelled"
+ *                         MISSED: "Missed"
+ *                     SLOT_STATUS:
+ *                       type: object
+ *                       description: Slot status options
+ *                       example:
+ *                         AVAILABLE: "Available"
+ *                         FULL: "Full"
+ *                         CLOSED: "Closed"
+ *                     EXTRA_REQUEST_STATUS:
+ *                       type: object
+ *                       description: Extra request status options
+ *                       example:
+ *                         NONE: "None"
+ *                         PENDING: "Pending"
+ *                         APPROVED: "Approved"
+ *                         REJECTED: "Rejected"
  *                 toastMessage:
  *                   type: string
  *                   example: Data fetched successfully
@@ -238,7 +203,7 @@ router.get("/constants", entryPoint, dbSelector, getAllConstants, exitPoint);
  *                     signedPost:
  *                       type: string
  *                       description: The presigned URL for uploading the file
- *                       example: "https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAWVWPW7BV4VAYNCFJ%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125526Z&X-Amz-Expires=3600&X-Amz-Signature=c12a2af175287fc25882a459373907e73710d47d07ffcd846a5761ff528fabb1&X-Amz-SignedHeaders=host&x-id=PutObject"
+ *                       example: "https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAXXXXXXXXXXXXXXXX%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125526Z&X-Amz-Expires=3600&X-Amz-Signature=c12a2af175287fc25882a459373907e73710d47d07ffcd846a5761ff528fabb1&X-Amz-SignedHeaders=host&x-id=PutObject"
  *                 toastMessage:
  *                   type: string
  *                   example: Success
@@ -355,7 +320,7 @@ router.post("/image", entryPoint, dbSelector, generatePresignedPost, exitPoint);
  *                       items:
  *                         type: string
  *                       description: Array of signed URLs for the requested files
- *                       example: ["https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAWVWPW7BV4VAYNCFJ%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125514Z&X-Amz-Expires=NaN&X-Amz-Signature=d7e1c519ebd6965fe369b2946cd7d112a6bae050c76e7c328cdf4b7601621344&X-Amz-SignedHeaders=host&x-id=GetObject"]
+ *                       example: ["https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAXXXXXXXXXXXXXXXX%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125514Z&X-Amz-Expires=NaN&X-Amz-Signature=d7e1c519ebd6965fe369b2946cd7d112a6bae050c76e7c328cdf4b7601621344&X-Amz-SignedHeaders=host&x-id=GetObject"]
  *                 toastMessage:
  *                   type: string
  *                   example: Success
@@ -537,6 +502,103 @@ router.post("/getImage", entryPoint, dbSelector, getSignedUrlController, exitPoi
  *                   example: An unexpected error occurred. Please try again
  */
 router.post("/location", entryPoint, dbSelector, getLocationData, exitPoint);
+
+/**
+ * @swagger
+ * /v1/generic/pincode:
+ *   post:
+ *     tags:
+ *       - generic
+ *     summary: Get Karnataka area pincodes or search within them
+ *     description: Retrieves a list of Karnataka area pincodes based on the provided search term or returns all Karnataka area pincodes if no search term is provided.
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               search:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     term:
+ *                       type: string
+ *                       example: "574154"
+ *                     fields:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["pincode", "area", "district"]
+ *                     startsWith:
+ *                       type: boolean
+ *                       example: true
+ *                     endsWith:
+ *                       type: boolean
+ *                       example: false
+ *               options:
+ *                 type: object
+ *                 properties:
+ *                   page:
+ *                     type: integer
+ *                     example: 1
+ *                   itemsPerPage:
+ *                     type: integer
+ *                     example: 10
+ *     responses:
+ *       200:
+ *         description: Pincode data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: integer
+ *                       example: 1
+ *                     tableData:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           pincode:
+ *                             type: string
+ *                             example: "574154"
+ *                           officeName:
+ *                             type: string
+ *                             example: "Mulki S.O."
+ *                           officeType:
+ *                             type: string
+ *                             example: "Sub Office"
+ *                           deliveryStatus:
+ *                             type: string
+ *                             example: "Delivery"
+ *                           district:
+ *                             type: string
+ *                             example: "Dakshina Kannada"
+ *                           state:
+ *                             type: string
+ *                             example: "Karnataka"
+ *                           region:
+ *                             type: string
+ *                             example: "South Karnataka"
+ *                           circle:
+ *                             type: string
+ *                             example: "Karnataka"
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/pincode", entryPoint, dbSelector, getAllPincodes, exitPoint);
 
 export default router;
 

@@ -5,14 +5,15 @@ export enum USER_ROLES {
   ADMIN = "admin",
 }
 
+export enum ENVIRONMENT {
+  PRODUCTION = "PROD",
+  STAGED = "STAGE",
+  DEVELOPMENT = "DEV",
+}
 
 export const CONSTANTS = {
   MONGODB_RECONNECT_INTERVAL: 5000,
-  MONGODB_RETRY_COUNT: 6,
-  OTP_EXPIRATION_TIME: 10,
   MIN_RESEND_INTERVAL_IN_SECONDS: 60,
-  WHATSAPP_COLLECTION: "whatsapp",
-  USER_COLLECTION: 'users',
 };
 
 export enum COLLECTIONS {
@@ -23,7 +24,7 @@ export enum COLLECTIONS {
   ADMIN = "admins",
   AREA = "areas",
   SLOT = "slots",
-  SLOT_SUBSCRIPTION = "slotSubscriptions",
+  SLOT_SUBSCRIPTION = "slotsubscriptions",
 }
 
 export enum SUBSCRIPTION_STATUS {

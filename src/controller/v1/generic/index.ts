@@ -3,10 +3,26 @@ import { ErrorCodes } from "../../../db/dbTypes";
 import {
   COLLECTIONS,
   USER_ROLES,
-  CONSTANTS
+  CONSTANTS,
+  SUBSCRIPTION_STATUS,
+  SLOT_STATUS,
+  EXTRA_REQUEST_STATUS,
+  ENVIRONMENT
 } from "../../../utils/v1/constants";
 import { getStorageServices } from "../../../services/v1/storage";
 import { getAllStates, getDistrictsByState } from "india-states-districts";
+const indianPincodes = require("indian-pincodes");
+
+interface PincodeItem {
+  pincode: string;
+  area: string;
+  officeType: string;
+  deliveryStatus: string;
+  district: string;
+  state: string;
+  region: string;
+  circle: string;
+}
 
 interface RequestWithTxId extends Request {
   txnId?: string;
@@ -25,7 +41,11 @@ export const getAllConstants = async (req: Request, res: Response, next: NextFun
     const constants = {
       COLLECTIONS,
       USER_ROLES,
-      CONSTANTS
+      CONSTANTS,
+      SUBSCRIPTION_STATUS,
+      SLOT_STATUS,
+      EXTRA_REQUEST_STATUS,
+      ENVIRONMENT
     };
 
     if (Object.keys(constants).length > 0) {
@@ -340,6 +360,84 @@ export const getLocationData = async (req: Request, res: Response, next: NextFun
     req.log.error(`Error in getLocationData: ${error} :- txId:${txId} path:${requestPath}`);
 
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred while fetching location data";
+
+    req.apiStatus = {
+      isSuccess: false,
+      status: 500,
+      data: errorMessage,
+      error: ErrorCodes[1010],
+      toastMessage: "An unexpected error occurred. Please try again",
+    };
+    next();
+    return;
+  }
+};
+
+export const getAllPincodes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const txId: string = (req as RequestWithTxId).txnId || (req as RequestWithTxId).txId || "";
+  const requestPath = req.baseUrl + req.path;
+
+  try {
+    req.log.info(`Fetching Karnataka pincodes`);
+    const { search = [], options = {} } = req.body;
+
+    // Fetch Karnataka pincodes and map to requested structure
+    const rawData = indianPincodes.getPincodesByState("Karnataka");
+    let mappedData: PincodeItem[] = rawData.map((item: any) => ({
+      pincode: item.pincode.toString(),
+      area: item.name,
+      officeType: item.division || "N/A", // Mapping division to officeType as a fallback
+      district: item.district,
+      state: item.state,
+      region: item.region,
+    }));
+
+    // Handle Search
+    if (search && Array.isArray(search) && search.length > 0) {
+      mappedData = mappedData.filter((item) => {
+        return search.some((s: any) => {
+          const term = s.term;
+          const fields = s.fields;
+          if (term && fields && Array.isArray(fields)) {
+            const regex = new RegExp(
+              `${s.startsWith ? "^" : ""}${term}${s.endsWith ? "$" : ""}`,
+              "i"
+            );
+            return fields.some((field: string) => {
+              const value = (item as any)[field];
+              return value && regex.test(value.toString());
+            });
+          }
+          return false;
+        });
+      });
+    }
+
+    const totalCount = mappedData.length;
+
+    // Handle Pagination
+    const page = typeof options.page === 'string' ? parseInt(options.page) : (options.page || 1);
+    const limit = typeof options.itemsPerPage === 'string' ? parseInt(options.itemsPerPage) : (options.itemsPerPage || totalCount);
+    const skip = (page - 1) * limit;
+
+    const paginatedData = mappedData.slice(skip, skip + limit);
+
+    req.log.info(`Karnataka pincodes fetched successfully. Count: ${totalCount}`);
+    req.apiStatus = {
+      isSuccess: true,
+      status: 200,
+      message: "success",
+      data: {
+        totalCount,
+        tableData: paginatedData,
+      },
+      toastMessage: "Data fetched successfully",
+    };
+    next();
+    return;
+  } catch (error: unknown) {
+    req.log.error(`Error in getAllPincodes: ${error} :- txId:${txId} path:${requestPath}`);
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred while fetching pincode data";
 
     req.apiStatus = {
       isSuccess: false,

@@ -34,6 +34,14 @@ import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
  *           type: boolean
  *           description: Flag for soft deletion
  *           default: false
+ *         totalCustomer:
+ *           type: number
+ *           description: Total number of customers in this area
+ *           example: 5
+ *         totalLiters:
+ *           type: number
+ *           description: Total water quantity (liters) for all customers in this area
+ *           example: 200
  *         createdAt:
  *           type: string
  *           format: date-time
