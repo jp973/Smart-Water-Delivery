@@ -203,7 +203,7 @@ router.get("/constants", entryPoint, dbSelector, getAllConstants, exitPoint);
  *                     signedPost:
  *                       type: string
  *                       description: The presigned URL for uploading the file
- *                       example: "https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAWVWPW7BV4VAYNCFJ%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125526Z&X-Amz-Expires=3600&X-Amz-Signature=c12a2af175287fc25882a459373907e73710d47d07ffcd846a5761ff528fabb1&X-Amz-SignedHeaders=host&x-id=PutObject"
+ *                       example: "https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAXXXXXXXXXXXXXXXX%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125526Z&X-Amz-Expires=3600&X-Amz-Signature=c12a2af175287fc25882a459373907e73710d47d07ffcd846a5761ff528fabb1&X-Amz-SignedHeaders=host&x-id=PutObject"
  *                 toastMessage:
  *                   type: string
  *                   example: Success
@@ -320,7 +320,7 @@ router.post("/image", entryPoint, dbSelector, generatePresignedPost, exitPoint);
  *                       items:
  *                         type: string
  *                       description: Array of signed URLs for the requested files
- *                       example: ["https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAWVWPW7BV4VAYNCFJ%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125514Z&X-Amz-Expires=NaN&X-Amz-Signature=d7e1c519ebd6965fe369b2946cd7d112a6bae050c76e7c328cdf4b7601621344&X-Amz-SignedHeaders=host&x-id=GetObject"]
+ *                       example: ["https://developmentexelon.s3.ap-south-1.amazonaws.com/123.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAXXXXXXXXXXXXXXXX%2F20240612%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20240612T125514Z&X-Amz-Expires=NaN&X-Amz-Signature=d7e1c519ebd6965fe369b2946cd7d112a6bae050c76e7c328cdf4b7601621344&X-Amz-SignedHeaders=host&x-id=GetObject"]
  *                 toastMessage:
  *                   type: string
  *                   example: Success

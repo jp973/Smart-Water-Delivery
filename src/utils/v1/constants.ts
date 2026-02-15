@@ -24,7 +24,7 @@ export enum COLLECTIONS {
   ADMIN = "admins",
   AREA = "areas",
   SLOT = "slots",
-  SLOT_SUBSCRIPTION = "slotSubscriptions",
+  SLOT_SUBSCRIPTION = "slotsubscriptions",
 }
 
 export enum SUBSCRIPTION_STATUS {

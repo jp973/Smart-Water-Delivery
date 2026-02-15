@@ -16,7 +16,7 @@ export function importBaseRoutes(app: Express) {
   app.use("/v1/admin/area", areaRoutes);
   app.use("/v1/admin/user", userRoutes);
   app.use("/v1/admin/slot", slotRoutes);
-  app.use("/v1/admin/slotSubscription", adminSlotSubRoutes);
+  app.use("/v1/admin/dashboard", adminSlotSubRoutes);
   app.use("/v1/user/auth", userAuthRoutes);
   app.use("/v1/user/slot", userSlotRoutes);
   app.use("/v1/generic", genericRoutes);

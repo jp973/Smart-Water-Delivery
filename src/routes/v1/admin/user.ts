@@ -74,6 +74,19 @@ const router = Router();
  *                 type: number
  *               notes:
  *                 type: string
+ *           example:
+ *             name: "John Doe"
+ *             phone: "9876543210"
+ *             countryCode: "91"
+ *             address:
+ *               houseNo: "123"
+ *               street: "Main St"
+ *               area: "64d2fa92e5b5f7765e4e13a2"
+ *               city: "Ahmedabad"
+ *               pincode: "380009"
+ *               landmark: "Near Park"
+ *             waterQuantity: 30
+ *             notes: "Special instructions"
  *     responses:
  *       201:
  *         description: User created successfully
@@ -93,6 +106,7 @@ const router = Router();
  *                   properties:
  *                     _id:
  *                       type: string
+ *                       example: "64d2fa92e5b5f7765e4e13a2"
  *                 toastMessage:
  *                   type: string
  *                   example: "User created successfully"
@@ -247,16 +261,10 @@ router.delete(
  *                       type: number
  *                     notes:
  *                       type: string
- *                     isEnabled:
- *                       type: boolean
- *                     isVerified:
- *                       type: boolean
- *                     isDeleted:
- *                       type: boolean
- *                     createdAt:
+ *                       example: "Morning delivery preferred"
+ *                     lastDeliveryDate:
  *                       type: string
- *                     updatedAt:
- *                       type: string
+ *                       example: "2026-02-14T10:46:03.854Z"
  *                     areaId:
  *                       type: object
  *                       properties:
@@ -417,21 +425,9 @@ router.get(
  *                           notes:
  *                             type: string
  *                             example: "Special instructions"
- *                           isEnabled:
- *                             type: boolean
- *                             example: true
- *                           isVerified:
- *                             type: boolean
- *                             example: false
- *                           isDeleted:
- *                             type: boolean
- *                             example: false
- *                           createdAt:
+ *                           lastDeliveryDate:
  *                             type: string
- *                             example: "2026-02-13T19:38:55.862Z"
- *                           updatedAt:
- *                             type: string
- *                             example: "2026-02-13T19:38:55.862Z"
+ *                             example: "2026-02-14T10:46:03.854Z"
  *                           areaId:
  *                             type: object
  *                             properties:
@@ -450,15 +446,6 @@ router.get(
  *                               pincode:
  *                                 type: string
  *                                 example: "380015"
- *                               isDeleted:
- *                                 type: boolean
- *                                 example: false
- *                               createdAt:
- *                                 type: string
- *                                 example: "2026-02-12T16:59:09.066Z"
- *                               updatedAt:
- *                                 type: string
- *                                 example: "2026-02-12T17:18:31.885Z"
  *                 toastMessage:
  *                   type: string
  *                   nullable: true

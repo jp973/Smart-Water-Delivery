@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { FilterQuery, SortOrder, Types, PipelineStage } from "mongoose";
-import { COLLECTIONS } from "../../../utils/v1/constants";
+import { COLLECTIONS, SUBSCRIPTION_STATUS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
 import { IUserModel, IUser, IArea } from "../../../utils/v1/customTypes";
 
@@ -24,6 +24,8 @@ interface GetAllOptions {
 interface AggregatedUser extends IUser {
     _id: Types.ObjectId;
     areaId?: IArea;
+    lastSubscription?: any[];
+    lastDeliveryDate?: string;
 }
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -201,7 +203,38 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
                     as: "areaId"
                 }
             },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
+            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: COLLECTIONS.SLOT_SUBSCRIPTION,
+                    localField: "_id",
+                    foreignField: "customerId",
+                    pipeline: [
+                        { $match: { status: SUBSCRIPTION_STATUS.DELIVERED, isDeleted: false } },
+                        { $sort: { deliveredAt: -1 } },
+                        { $limit: 1 }
+                    ],
+                    as: "lastSubscription"
+                }
+            },
+            {
+                $addFields: {
+                    lastDeliveryDate: { $ifNull: [{ $arrayElemAt: ["$lastSubscription.deliveredAt", 0] }, ""] }
+                }
+            },
+            {
+                $project: {
+                    isEnabled: 0,
+                    isVerified: 0,
+                    isDeleted: 0,
+                    createdAt: 0,
+                    updatedAt: 0,
+                    "areaId.isDeleted": 0,
+                    "areaId.createdAt": 0,
+                    "areaId.updatedAt": 0,
+                    lastSubscription: 0,
+                },
+            },
         ]) as AggregatedUser[];
 
         const user = results.length > 0 ? results[0] : null;
@@ -297,7 +330,25 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                     as: "areaId"
                 }
             },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
+            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: COLLECTIONS.SLOT_SUBSCRIPTION,
+                    localField: "_id",
+                    foreignField: "customerId",
+                    pipeline: [
+                        { $match: { status: SUBSCRIPTION_STATUS.DELIVERED, isDeleted: false } },
+                        { $sort: { deliveredAt: -1 } },
+                        { $limit: 1 }
+                    ],
+                    as: "lastSubscription"
+                }
+            },
+            {
+                $addFields: {
+                    lastDeliveryDate: { $ifNull: [{ $arrayElemAt: ["$lastSubscription.deliveredAt", 0] }, ""] }
+                }
+            }
         ];
 
         // Handle complex search array after lookup to support area fields
@@ -347,7 +398,20 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                 data: [
                     { $sort: aggregationSort },
                     { $skip: skip },
-                    { $limit: limit }
+                    { $limit: limit },
+                    {
+                        $project: {
+                            isEnabled: 0,
+                            isVerified: 0,
+                            isDeleted: 0,
+                            createdAt: 0,
+                            updatedAt: 0,
+                            "areaId.isDeleted": 0,
+                            "areaId.createdAt": 0,
+                            "areaId.updatedAt": 0,
+                            lastSubscription: 0,
+                        },
+                    },
                 ]
             }
         });
@@ -355,6 +419,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const aggregationResult = await db.models[COLLECTIONS.USER].aggregate(pipeline, {
             collation: { locale: "en", strength: 2 }
         }) as AggregationFacetResult[];
+
 
         const data = aggregationResult[0].data || [];
         const totalCount = aggregationResult[0].metadata[0]?.total || 0;

@@ -125,7 +125,22 @@ export const getCurrentSlot = async (req: Request, res: Response, next: NextFunc
                     as: "userSubscription"
                 }
             },
-            { $project: { allSubscriptions: 0 } },
+            {
+                $project: {
+                    allSubscriptions: 0,
+                    isActive: 0,
+                    isDeleted: 0,
+                    createdAt: 0,
+                    updatedAt: 0,
+                    "areaId.isDeleted": 0,
+                    "areaId.createdAt": 0,
+                    "areaId.updatedAt": 0,
+                    "userSubscription.isActive": 0,
+                    "userSubscription.isDeleted": 0,
+                    "userSubscription.createdAt": 0,
+                    "userSubscription.updatedAt": 0,
+                }
+            },
             { $sort: { startTime: 1 } }
         ]);
 

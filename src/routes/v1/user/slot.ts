@@ -36,6 +36,90 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Current slot fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Current slot fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     slot:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         date:
+ *                           type: string
+ *                           format: date-time
+ *                         startTime:
+ *                           type: string
+ *                           format: date-time
+ *                         endTime:
+ *                           type: string
+ *                           format: date-time
+ *                         areaId:
+ *                           type: object
+ *                         capacity:
+ *                           type: integer
+ *                         currentBookingsCount:
+ *                           type: integer
+ *                         bookingCutoffTime:
+ *                           type: string
+ *                           format: date-time
+ *                         status:
+ *                           type: string
+ *                     subscription:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         customerId:
+ *                           type: string
+ *                         slotId:
+ *                           type: string
+ *                         quantity:
+ *                           type: integer
+ *                         status:
+ *                           type: string
+ *                         extraQuantity:
+ *                           type: integer
+ *                         extraRequestStatus:
+ *                           type: string
+ *             example:
+ *               status: 200
+ *               message: "Current slot fetched successfully"
+ *               data:
+ *                 slot:
+ *                   _id: "6991f98c6e4e38c7d5050fdb"
+ *                   date: "2026-02-16T00:00:00.000Z"
+ *                   startTime: "2026-02-16T06:00:00.000Z"
+ *                   endTime: "2026-02-16T07:00:00.000Z"
+ *                   areaId:
+ *                     _id: "6991f60889817aa62340410f"
+ *                     name: "Kenchanakere"
+ *                     description: "Residential area in the north"
+ *                     city: "mulki"
+ *                     pincode: "574154"
+ *                   capacity: 400
+ *                   currentBookingsCount: 240
+ *                   bookingCutoffTime: "2026-02-16T04:30:00.000Z"
+ *                   status: "Available"
+ *                 subscription:
+ *                   _id: "6991f98c6e4e38c7d5050fdf"
+ *                   customerId: "6991820300914c506604f1d6"
+ *                   slotId: "6991f98c6e4e38c7d5050fdb"
+ *                   quantity: 100
+ *                   status: "Booked"
+ *                   extraQuantity: 0
+ *                   extraRequestStatus: "None"
+ *               toastMessage: null
  *       404:
  *         description: User area not found
  */
