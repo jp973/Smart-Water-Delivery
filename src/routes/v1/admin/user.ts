@@ -44,12 +44,18 @@ const router = Router();
  *             type: object
  *             required:
  *               - name
+ *               - email
+ *               - password
  *               - phone
  *               - countryCode
  *               - address
  *               - waterQuantity
  *             properties:
  *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
  *                 type: string
  *               phone:
  *                 type: string
@@ -77,6 +83,8 @@ const router = Router();
  *           example:
  *             name: "John Doe"
  *             phone: "9876543210"
+ *             email: "user@example.com"
+ *             password: "User@123"
  *             countryCode: "91"
  *             address:
  *               houseNo: "123"
@@ -146,6 +154,10 @@ router.post(
  *             type: object
  *             properties:
  *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
  *                 type: string
  *               phone:
  *                 type: string

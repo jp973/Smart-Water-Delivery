@@ -84,6 +84,8 @@ describe("User CRUD API Integration Tests", () => {
             .set("Authorization", `Bearer ${accessToken}`)
             .send({
                 name: "John Doe",
+                email: "john@example.com",
+                password: "User@123",
                 countryCode: "91",
                 phone: "9876543210",
                 address: {
@@ -132,9 +134,9 @@ describe("User CRUD API Integration Tests", () => {
 
     it("should create multiple users for getAll testing", async () => {
         const users = [
-            { name: "Alice", phone: "9000000001", countryCode: "91", address: { houseNo: "1", street: "A", area: areaId, city: "Ahmedabad", pincode: "380001" }, waterQuantity: 10 },
-            { name: "Bob", phone: "9000000002", countryCode: "91", address: { houseNo: "2", street: "B", area: areaId, city: "Surat", pincode: "395001" }, waterQuantity: 15 },
-            { name: "Charlie", phone: "9000000003", countryCode: "91", address: { houseNo: "3", street: "C", area: areaId, city: "Ahmedabad", pincode: "380002" }, waterQuantity: 30 }
+            { name: "Alice", email: "alice@example.com", password: "User@123", phone: "9000000001", countryCode: "91", address: { houseNo: "1", street: "A", area: areaId, city: "Ahmedabad", pincode: "380001" }, waterQuantity: 10 },
+            { name: "Bob", email: "bob@example.com", password: "User@123", phone: "9000000002", countryCode: "91", address: { houseNo: "2", street: "B", area: areaId, city: "Surat", pincode: "395001" }, waterQuantity: 15 },
+            { name: "Charlie", email: "charlie@example.com", password: "User@123", phone: "9000000003", countryCode: "91", address: { houseNo: "3", street: "C", area: areaId, city: "Ahmedabad", pincode: "380002" }, waterQuantity: 30 }
         ];
 
         for (const user of users) {

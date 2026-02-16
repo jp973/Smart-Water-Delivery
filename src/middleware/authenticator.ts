@@ -44,7 +44,7 @@ const authenticator = (role: USER_ROLES) => {
       if (role === USER_ROLES.ADMIN) {
         user = await req.db.models[COLLECTIONS.ADMIN].findById(uid).select("-password");
       } else if (role === USER_ROLES.USER) {
-        user = await req.db.models[COLLECTIONS.USER].findById(uid);
+        user = await req.db.models[COLLECTIONS.USER].findById(uid).select("-password");
       }
 
       // if (!user || user?.isDeleted !== false || user?.isEnabled !== true) {
@@ -76,4 +76,3 @@ const authenticator = (role: USER_ROLES) => {
 export const adminAuthenticator = authenticator(USER_ROLES.ADMIN);
 
 export const userAuthenticator = authenticator(USER_ROLES.USER);
-
