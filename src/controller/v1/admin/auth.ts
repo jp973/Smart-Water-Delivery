@@ -1,243 +1,144 @@
 import { Request, Response, NextFunction } from "express";
-import { getMessagingService } from "../../../services/v1/message";
-import { COLLECTIONS, CONSTANTS, USER_ROLES } from "../../../utils/v1/constants";
+import { COLLECTIONS, USER_ROLES } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
-import { generateOtp } from "../../../utils/v1/helper";
 import jwt from "jsonwebtoken";
 import { config } from "../../../config/v1/config";
+import bcrypt from "bcryptjs";
 
 const adminAuthLogger = logger.child({ module: "adminAuth" });
 
-export const sendAdminOTP = async (req: Request, res: Response, next: NextFunction) => {
+const normalizeEmail = (value: unknown): string =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const normalizePassword = (value: unknown): string => (typeof value === "string" ? value : "");
+
+const normalizeName = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+
+export const loginAdmin = async (req: Request, res: Response, next: NextFunction) => {
     const txId: string = req.txnId || "";
     const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
-    const actionLogger = adminAuthLogger.child({ action: "sendAdminOTP", txId, requestPath });
+    const actionLogger = adminAuthLogger.child({ action: "loginAdmin", txId, requestPath });
 
-    actionLogger.info("Processing admin OTP send request");
-
-    try {
-        const rawCountryCode = typeof req.body.countryCode === "string" ? req.body.countryCode.trim() : "";
-        const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim() : "";
-
-        const db = req.db;
-
-        // Check if OTP was recently sent (cooldown period)
-        const existingOtp = await db.models[COLLECTIONS.OTP].findOne({
-            countryCode: rawCountryCode,
-            phone: rawPhone,
-        });
-
-        if (existingOtp?.createdAt) {
-            const timeDiff = Math.abs(Date.now() - existingOtp.createdAt.getTime());
-            const diffSeconds = Math.floor(timeDiff / 1000);
-            if (diffSeconds < CONSTANTS.MIN_RESEND_INTERVAL_IN_SECONDS) {
-                req.apiStatus = {
-                    isSuccess: false,
-                    message: "OTP already sent",
-                    status: 400,
-                    data: {},
-                    toastMessage: "OTP already sent",
-                };
-                actionLogger.info("OTP already sent recently; blocking resend");
-                return next();
-            }
-        }
-
-
-        try {
-            // Delete any existing OTPs for this phone number
-            await db.models[COLLECTIONS.OTP].deleteMany({
-                countryCode: rawCountryCode,
-                phone: rawPhone,
-            });
-
-            // Generate OTP
-            const otpValue = config.ENVIRONMENT === "development" ? "1234" : generateOtp();
-
-            // Create new OTP record
-            const otpDoc = await db.models[COLLECTIONS.OTP].create({
-                countryCode: rawCountryCode,
-                phone: rawPhone,
-                otp: otpValue,
-            });
-
-            // Send OTP via messaging service
-            const messagingServiceModule = await getMessagingService();
-            await messagingServiceModule.sendOTP(rawPhone, rawCountryCode, otpDoc.otp ?? "");
-
-            req.apiStatus = {
-                isSuccess: true,
-                message: "success",
-                status: 200,
-                data: "OTP sent successfully",
-                toastMessage: "OTP sent",
-            };
-            actionLogger.info("Admin OTP sent successfully");
-        } catch (error) {
-            actionLogger.error({ err: error }, "Error in OTP send process");
-            throw error;
-        }
-
-
-        return next();
-    } catch (error) {
-        actionLogger.error({ err: error }, "Failed to send admin OTP");
-        req.apiStatus = {
-            isSuccess: false,
-            message: "Error sending OTP",
-            status: 500,
-            data: {},
-            toastMessage: "Error sending OTP",
-        };
-        return next();
-    }
-};
-
-export const verifyAdminOTP = async (req: Request, res: Response, next: NextFunction) => {
-    const txId: string = req.txnId || "";
-    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
-    const actionLogger = adminAuthLogger.child({ action: "verifyAdminOTP", txId, requestPath });
-
-    actionLogger.info("Verifying admin OTP");
+    actionLogger.info("Processing admin email/password login request");
 
     try {
-        const rawCountryCode = typeof req.body.countryCode === "string" ? req.body.countryCode.trim() : "";
-        const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim() : "";
-        const rawOtp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+        const email = normalizeEmail(req.body.email);
+        const password = normalizePassword(req.body.password);
 
-        const db = req.db;
-
-        // Find OTP document
-        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({
-            countryCode: rawCountryCode,
-            phone: rawPhone,
-            otp: rawOtp,
-        });
-
-        if (!otpDoc) {
+        if (!email || !password) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "Invalid OTP",
+                message: "Email and password are required",
                 status: 400,
                 data: {},
-                toastMessage: "Invalid OTP",
+                toastMessage: "Email and password are required",
             };
-            actionLogger.warn("Invalid OTP provided");
+            actionLogger.warn("Missing email or password");
+            return next();
+        }
+
+        const db = req.db;
+        const admin = await db.models[COLLECTIONS.ADMIN].findOne({ email });
+
+        if (!admin) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Invalid credentials",
+                status: 401,
+                data: {},
+                toastMessage: "Invalid credentials",
+            };
+            actionLogger.warn("Admin not found for provided email");
+            return next();
+        }
+
+        const passwordMatches = await bcrypt.compare(password, admin.password);
+        if (!passwordMatches) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Invalid credentials",
+                status: 401,
+                data: {},
+                toastMessage: "Invalid credentials",
+            };
+            actionLogger.warn("Invalid password for admin");
             return next();
         }
 
         const jwtSecret = config.JWT_SECRET_KEY;
 
-        try {
-            // Delete the used OTP
-            await db.models[COLLECTIONS.OTP].deleteMany({
-                countryCode: rawCountryCode,
-                phone: rawPhone,
-            });
-
-            // Check if admin exists
-            let admin = await db.models[COLLECTIONS.ADMIN].findOne({
-                countryCode: rawCountryCode,
-                phone: rawPhone,
-            });
-
-            let isNewAdmin = false;
-
-            // Create admin if doesn't exist (first-time login)
-            if (!admin) {
-                admin = await db.models[COLLECTIONS.ADMIN].create({
-                    countryCode: rawCountryCode,
-                    phone: rawPhone,
-                    name: "", // Empty name, admin can update later
-                });
-                isNewAdmin = true;
-                actionLogger.info("Created new admin account");
-            }
-
-            // Check if admin has completed profile (name is set)
-            const profileCompleted = Boolean(admin.name && admin.name.trim());
-
-            // Generate JWT tokens
-            const accessToken = jwt.sign(
-                {
-                    id: admin._id,
-                    role: USER_ROLES.ADMIN,
-                    phone: rawPhone,
-                    countryCode: rawCountryCode,
-                },
-                jwtSecret,
-                {
-                    expiresIn: `${config.ACCESS_TOKEN_EXPIRY}m`,
-                },
-            );
-
-            const refreshToken = jwt.sign(
-                {
-                    id: admin._id,
-                    role: USER_ROLES.ADMIN,
-                    phone: rawPhone,
-                    countryCode: rawCountryCode,
-                },
-                jwtSecret,
-                {
-                    expiresIn: `${config.REFRESH_TOKEN_EXPIRY}d`,
-                },
-            );
-
-            // Delete existing tokens for this admin
-            await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
-                userId: admin._id,
+        const accessToken = jwt.sign(
+            {
+                id: admin._id,
                 role: USER_ROLES.ADMIN,
-            });
+                email: admin.email,
+            },
+            jwtSecret,
+            {
+                expiresIn: `${config.ACCESS_TOKEN_EXPIRY}m`,
+            },
+        );
 
-            await db.models[COLLECTIONS.REFRESH_TOKEN].deleteMany({
-                userId: admin._id,
+        const refreshToken = jwt.sign(
+            {
+                id: admin._id,
                 role: USER_ROLES.ADMIN,
-            });
+                email: admin.email,
+            },
+            jwtSecret,
+            {
+                expiresIn: `${config.REFRESH_TOKEN_EXPIRY}d`,
+            },
+        );
 
-            // Create new access token record
-            await db.models[COLLECTIONS.ACCESS_TOKEN].create({
-                token: accessToken,
-                userId: admin._id,
-                role: USER_ROLES.ADMIN,
-            });
+        await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
+            userId: admin._id,
+            role: USER_ROLES.ADMIN,
+        });
 
-            // Create new refresh token record
-            await db.models[COLLECTIONS.REFRESH_TOKEN].create({
-                token: refreshToken,
-                userId: admin._id,
-                role: USER_ROLES.ADMIN,
-            });
+        await db.models[COLLECTIONS.REFRESH_TOKEN].deleteMany({
+            userId: admin._id,
+            role: USER_ROLES.ADMIN,
+        });
 
-            req.apiStatus = {
-                isSuccess: true,
-                message: "OTP verified successfully",
-                status: 200,
-                data: {
-                    isVerified: true,
-                    isNewAdmin: isNewAdmin || !profileCompleted,
-                    profileCompleted: profileCompleted,
-                    accessToken,
-                    refreshToken,
-                    expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
-                },
-                toastMessage: "OTP verified",
-            };
-            actionLogger.info("Admin OTP verified successfully");
-        } catch (error) {
-            actionLogger.error({ err: error }, "Error in OTP verification process");
-            throw error;
-        }
+        await db.models[COLLECTIONS.ACCESS_TOKEN].create({
+            token: accessToken,
+            userId: admin._id,
+            role: USER_ROLES.ADMIN,
+        });
 
+        await db.models[COLLECTIONS.REFRESH_TOKEN].create({
+            token: refreshToken,
+            userId: admin._id,
+            role: USER_ROLES.ADMIN,
+        });
+
+        const profileCompleted = Boolean(admin.name && admin.name.trim());
+
+        req.apiStatus = {
+            isSuccess: true,
+            message: "Login successful",
+            status: 200,
+            data: {
+                profileCompleted,
+                accessToken,
+                refreshToken,
+                expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
+                email: admin.email,
+                name: admin.name,
+            },
+            toastMessage: "Logged in successfully",
+        };
+        actionLogger.info("Admin login successful");
         return next();
     } catch (error) {
-        actionLogger.error({ err: error }, "Failed to verify admin OTP");
+        actionLogger.error({ err: error }, "Failed to process admin login");
         req.apiStatus = {
             isSuccess: false,
-            message: "Error verifying OTP",
+            message: "Error logging in",
             status: 500,
             data: {},
-            toastMessage: "Error verifying OTP",
+            toastMessage: "Error logging in",
         };
         return next();
     }
@@ -280,12 +181,10 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
             return next();
         }
 
-        // Verify JWT token signature and expiry
         let decodedToken: {
             id: string;
             role: string;
-            phone?: string;
-            countryCode?: string;
+            email?: string;
         };
 
         try {
@@ -316,7 +215,6 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
             return next();
         }
 
-        // Verify token role matches admin role
         if (decodedToken.role !== USER_ROLES.ADMIN) {
             actionLogger.warn("Refresh token role mismatch");
             req.apiStatus = {
@@ -329,7 +227,6 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
             return next();
         }
 
-        // Check if token exists in database
         const tokenFromDb = await db.models[COLLECTIONS.REFRESH_TOKEN].findOne({
             token: rawRefreshToken,
         });
@@ -346,7 +243,6 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
             return next();
         }
 
-        // Verify userId from JWT matches userId in database
         const jwtUserId = decodedToken.id?.toString();
         const dbUserId = tokenFromDb.userId?.toString();
 
@@ -363,13 +259,11 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
         }
 
         try {
-            // Delete existing access tokens for this admin
             await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
                 userId: tokenFromDb.userId,
                 role: USER_ROLES.ADMIN,
             });
 
-            // Get admin details
             const admin = await db.models[COLLECTIONS.ADMIN].findOne({ _id: tokenFromDb.userId });
 
             if (!admin) {
@@ -384,13 +278,11 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
                 return next();
             }
 
-            // Generate new access token
             const accessToken = jwt.sign(
                 {
                     id: tokenFromDb.userId,
                     role: USER_ROLES.ADMIN,
-                    phone: admin.phone,
-                    countryCode: admin.countryCode,
+                    email: admin.email,
                 },
                 jwtSecret,
                 {
@@ -398,7 +290,6 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
                 },
             );
 
-            // Create new access token record
             await db.models[COLLECTIONS.ACCESS_TOKEN].create({
                 token: accessToken,
                 userId: tokenFromDb.userId,
@@ -413,6 +304,8 @@ export const refreshAdminToken = async (req: Request, res: Response, next: NextF
                     accessToken,
                     refreshToken: rawRefreshToken,
                     expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
+                    email: admin.email,
+                    name: admin.name,
                 },
                 toastMessage: "Token refreshed",
             };
@@ -512,15 +405,14 @@ export const updateAdminProfile = async (req: Request, res: Response, next: Next
             return next();
         }
 
-        const rawName = typeof req.body.name === "string" ? req.body.name.trim() : "";
+        const rawName = normalizeName(req.body.name);
 
         const db = req.db;
 
-        // Update admin profile
         const updatedAdmin = await db.models[COLLECTIONS.ADMIN].findByIdAndUpdate(
             userId,
             { name: rawName },
-            { new: true },
+            { new: true, projection: { password: 0 } },
         );
 
         if (!updatedAdmin) {
@@ -541,8 +433,7 @@ export const updateAdminProfile = async (req: Request, res: Response, next: Next
             status: 200,
             data: {
                 name: updatedAdmin.name,
-                phone: updatedAdmin.phone,
-                countryCode: updatedAdmin.countryCode,
+                email: updatedAdmin.email,
             },
             toastMessage: "Profile updated successfully",
         };
@@ -582,7 +473,9 @@ export const getAdminProfile = async (req: Request, res: Response, next: NextFun
 
         const admin = await db.models[COLLECTIONS.ADMIN].findOne({
             _id: userId,
-        }).lean();
+        })
+            .select("-password")
+            .lean();
 
         if (!admin) {
             req.apiStatus = {

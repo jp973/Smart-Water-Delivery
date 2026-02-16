@@ -5,6 +5,7 @@ import app from "../../../src/index";
 import { COLLECTIONS } from "../../../src/utils/v1/constants";
 import { dbConnections } from "../../../src/db/connection";
 import { registerAllModels } from "../../../src/db/models/index";
+import bcrypt from "bcryptjs";
 
 let mongoServer: MongoMemoryServer;
 
@@ -27,12 +28,11 @@ beforeAll(async () => {
 
     // Initial seed: Create an admin since we don't have one in memory DB
     const AdminModel = conn.models[COLLECTIONS.ADMIN];
+    const hashedPassword = await bcrypt.hash("Admin@123", 10);
     await AdminModel.create({
         name: "Test Admin",
-        countryCode: "91",
-        phone: "1122334455",
-        isEnabled: true,
-        isDeleted: false
+        email: "admin@example.com",
+        password: hashedPassword,
     });
 });
 
@@ -46,19 +46,13 @@ describe("User CRUD API Integration Tests", () => {
     let areaId: string;
     let userId: string;
 
-    const adminPhone = "1122334455";
-    const adminCountryCode = "91";
+    const adminEmail = "admin@example.com";
+    const adminPassword = "Admin@123";
 
     it("should login as admin and get access token", async () => {
-        // Send OTP
-        await request(app)
-            .post("/v1/admin/auth/otp/send")
-            .send({ phone: adminPhone, countryCode: adminCountryCode });
-
-        // Verify OTP
         const res = await request(app)
-            .post("/v1/admin/auth/otp/verify")
-            .send({ phone: adminPhone, countryCode: adminCountryCode, otp: "1234" });
+            .post("/v1/admin/auth/login")
+            .send({ email: adminEmail, password: adminPassword });
 
         expect(res.status).toBe(200);
         expect(res.body.data).toHaveProperty("accessToken");

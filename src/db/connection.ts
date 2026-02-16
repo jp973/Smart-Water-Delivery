@@ -2,7 +2,7 @@ import mongoose, { Connection } from "mongoose";
 import { CONSTANTS } from "../utils/v1/constants";
 import { config } from "../config/v1/config";
 import { DBModels, registerAllModels } from "./models/index";
-//import { initializeSeed } from "../seed/v1";
+import { initializeSeed } from "../seed/v1";
 
 
 export const DB_STATE = {
@@ -41,7 +41,7 @@ export async function initializeAllDBConnections() {
     console.info("Mongodb main connection connected");
     if (!seedInitialized) {
       seedInitialized = true;
-      //await initializeSeed();
+      await initializeSeed();
     }
   });
   mainConn.on("disconnected", () => {
@@ -50,7 +50,7 @@ export async function initializeAllDBConnections() {
   // If connection is already connected, initialize seed immediately
   if (mainConn.readyState === 1 && !seedInitialized) {
     seedInitialized = true;
-    //await initializeSeed();
+    await initializeSeed();
   }
   dbConnections.main = mainConn as Connection & {
     models: DBModels;

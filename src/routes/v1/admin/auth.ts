@@ -5,14 +5,12 @@ import { dbSelector } from "../../../middleware/dbSelector";
 import { validate } from "../../../middleware/zodValidator";
 import { adminAuthenticator } from "../../../middleware/authenticator";
 import {
-    sendAdminOTPSchema,
-    verifyAdminOTPSchema,
+    adminLoginSchema,
     refreshAdminTokenSchema,
     updateAdminProfileSchema
 } from "../../../schemas/v1/adminAuth";
 import {
-    sendAdminOTP,
-    verifyAdminOTP,
+    loginAdmin,
     refreshAdminToken,
     logout,
     updateAdminProfile,
@@ -23,9 +21,9 @@ const router = Router();
 
 /**
  * @swagger
- * /v1/admin/auth/sendOTP:
+ * /v1/admin/auth/login:
  *   post:
- *     summary: Send an OTP to the admin's phone
+ *     summary: Login admin using email and password
  *     tags:
  *       - Admin/Auth
  *     requestBody:
@@ -35,20 +33,20 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - countryCode
- *               - phone
+ *               - email
+ *               - password
  *             properties:
- *               countryCode:
+ *               email:
  *                 type: string
- *                 description: E.164 compatible country code prefix
- *                 example: "91"
- *               phone:
+ *                 description: Admin email
+ *                 example: "admin@gmail.com"
+ *               password:
  *                 type: string
- *                 description: Admin's phone number without country code
- *                 example: "9876543210"
+ *                 description: Admin password
+ *                 example: "Admin@123"
  *     responses:
  *       200:
- *         description: OTP sent successfully
+ *         description: Login successful
  *         content:
  *           application/json:
  *             schema:
@@ -59,119 +57,10 @@ const router = Router();
  *                   example: 200
  *                 message:
  *                   type: string
- *                   example: "success"
- *                 data:
- *                   type: string
- *                   example: "OTP sent successfully"
- *                 toastMessage:
- *                   type: string
- *                   nullable: true
- *                   example: "OTP sent"
- *       400:
- *         description: Missing parameters or resend cool down not elapsed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 400
- *                 message:
- *                   type: string
- *                   example: "OTP already sent"
- *                 data:
- *                   type: object
- *                   nullable: true
- *                   example: null
- *                 toastMessage:
- *                   type: string
- *                   example: "OTP already sent"
- *       500:
- *         description: Unexpected error while sending OTP
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 500
- *                 message:
- *                   type: string
- *                   example: "Error sending OTP"
- *                 data:
- *                   type: object
- *                   nullable: true
- *                   example: null
- *                 toastMessage:
- *                   type: string
- *                   example: "Error sending OTP"
- */
-router.post(
-    "/sendOTP",
-    entryPoint,
-    validate(sendAdminOTPSchema),
-    dbSelector,
-    sendAdminOTP,
-    exitPoint,
-);
-
-/**
- * @swagger
- * /v1/admin/auth/verifyOTP:
- *   post:
- *     summary: Verify OTP and issue admin tokens
- *     tags:
- *       - Admin/Auth
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - countryCode
- *               - phone
- *               - otp
- *             properties:
- *               countryCode:
- *                 type: string
- *                 description: Country code prefix
- *                 example: "91"
- *               phone:
- *                 type: string
- *                 description: Phone number that received the OTP
- *                 example: "9876543210"
- *               otp:
- *                 type: string
- *                 description: OTP received on the phone
- *                 example: "1234"
- *     responses:
- *       200:
- *         description: OTP verified successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: "OTP verified successfully"
+ *                   example: "Login successful"
  *                 data:
  *                   type: object
  *                   properties:
- *                     isVerified:
- *                       type: boolean
- *                       description: Indicates if the OTP was successfully verified
- *                       example: true
- *                     isNewAdmin:
- *                       type: boolean
- *                       description: Indicates if this is a new admin or profile incomplete
- *                       example: true
  *                     profileCompleted:
  *                       type: boolean
  *                       description: Indicates if the admin has completed their profile (name set)
@@ -188,12 +77,18 @@ router.post(
  *                       type: string
  *                       format: date-time
  *                       description: Expiry time of the access token
- *                       example: "2025-11-14T17:02:33.934Z"
+ *                       example: "2026-11-14T17:02:33.934Z"
+ *                     email:
+ *                       type: string
+ *                       example: "admin@example.com"
+ *                     name:
+ *                       type: string
+ *                       example: "Admin User"
  *                 toastMessage:
  *                   type: string
- *                   example: "OTP verified"
+ *                   example: "Logged in successfully"
  *       400:
- *         description: Invalid OTP or validation error
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
@@ -204,15 +99,15 @@ router.post(
  *                   example: 400
  *                 message:
  *                   type: string
- *                   example: "Invalid OTP"
+ *                   example: "Email and password are required"
  *                 data:
  *                   type: object
  *                   example: {}
  *                 toastMessage:
  *                   type: string
- *                   example: "Invalid OTP"
+ *                   example: "Email and password are required"
  *       500:
- *         description: Unexpected error while verifying OTP
+ *         description: Unexpected error while logging in
  *         content:
  *           application/json:
  *             schema:
@@ -223,20 +118,20 @@ router.post(
  *                   example: 500
  *                 message:
  *                   type: string
- *                   example: "Error verifying OTP"
+ *                   example: "Error logging in"
  *                 data:
  *                   type: object
  *                   example: {}
  *                 toastMessage:
  *                   type: string
- *                   example: "Error verifying OTP"
+ *                   example: "Error logging in"
  */
 router.post(
-    "/verifyOTP",
+    "/login",
     entryPoint,
-    validate(verifyAdminOTPSchema),
+    validate(adminLoginSchema),
     dbSelector,
-    verifyAdminOTP,
+    loginAdmin,
     exitPoint,
 );
 
@@ -290,6 +185,12 @@ router.post(
  *                       format: date-time
  *                       description: Expiry time of the new access token
  *                       example: "2026-02-10T23:15:33.934Z"
+ *                     email:
+ *                       type: string
+ *                       example: "admin@example.com"
+ *                     name:
+ *                       type: string
+ *                       example: "Admin User"
  *                 toastMessage:
  *                   type: string
  *                   example: "Token refreshed"
@@ -402,12 +303,9 @@ router.post(
  *                     name:
  *                       type: string
  *                       example: "John Doe"
- *                     phone:
+ *                     email:
  *                       type: string
- *                       example: "9876543210"
- *                     countryCode:
- *                       type: string
- *                       example: "91"
+ *                       example: "admin@example.com"
  *                 toastMessage:
  *                   type: string
  *                   example: "Profile updated successfully"
