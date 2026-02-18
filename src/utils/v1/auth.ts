@@ -10,8 +10,6 @@ export interface TokenPayload {
 }
 
 export const generateAccessToken = (payload: TokenPayload): string => {
-  // Convert minutes to seconds (JWT expects number in seconds or string like "10m")
-  // Config value is in minutes, so multiply by 60 to get seconds
   const expiresInSeconds = config.ACCESS_TOKEN_EXPIRY * 60;
   
   return jwt.sign(payload, config.JWT_SECRET_KEY, {
@@ -20,8 +18,6 @@ export const generateAccessToken = (payload: TokenPayload): string => {
 };
 
 export const generateRefreshToken = (payload: TokenPayload): string => {
-  // Convert minutes to seconds (JWT expects number in seconds or string like "10m")
-  // Config value is in minutes, so multiply by 60 to get seconds
   const expiresInSeconds = config.REFRESH_TOKEN_EXPIRY * 60;
   
   return jwt.sign(payload, config.JWT_SECRET_KEY, {

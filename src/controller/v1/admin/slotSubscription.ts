@@ -163,7 +163,9 @@ export const getPendingExtraRequests = async (req: Request, res: Response, next:
             }
         });
 
-        const aggregationResult = await db.models[COLLECTIONS.SLOT_SUBSCRIPTION].aggregate(pipeline) as AggregationFacetResult[];
+        const aggregationResult = await db.models[COLLECTIONS.SLOT_SUBSCRIPTION].aggregate(pipeline, {
+            collation: { locale: "en", strength: 2 }
+        }) as AggregationFacetResult[];
 
         let tableData = aggregationResult[0].data || [];
         const totalCount = aggregationResult[0].metadata[0]?.total || 0;
@@ -174,7 +176,7 @@ export const getPendingExtraRequests = async (req: Request, res: Response, next:
                 const projectedItem: Partial<AggregatedExtraRequest> = {};
                 (Object.keys(project) as (keyof AggregatedExtraRequest)[]).forEach((key) => {
                     if (project[key] && key in item) {
-                        (projectedItem as any)[key] = item[key];
+                        (projectedItem as Record<string, unknown>)[key as string] = item[key];
                     }
                 });
                 // Always include _id unless explicitly excluded
@@ -341,7 +343,9 @@ export const getTodaySlots = async (req: Request, res: Response, next: NextFunct
         const aggregationSort: Record<string, 1 | -1> = {};
         if (options.sortBy && Array.isArray(options.sortBy)) {
             options.sortBy.forEach((field: string, index: number) => {
-                aggregationSort[field] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
+                let sortField = field;
+                if (field === "area") sortField = "area.name";
+                aggregationSort[sortField] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
             });
         } else {
             aggregationSort.startTime = 1;
@@ -447,13 +451,13 @@ export const getTodaySlots = async (req: Request, res: Response, next: NextFunct
 
         // Handle Search
         if (search && Array.isArray(search) && search.length > 0) {
-            const searchQueries: FilterQuery<any>[] = [];
-            search.forEach((s: any) => {
+            const searchQueries: FilterQuery<ISlot>[] = [];
+            search.forEach((s: SearchCriteria) => {
                 const regex = new RegExp(`${s.startsWith ? "^" : ""}${s.term}${s.endsWith ? "$" : ""}`, "i");
                 s.fields.forEach((field: string) => {
                     let mappedField = field;
                     if (field === "area") mappedField = "area.name";
-                    searchQueries.push({ [mappedField]: regex });
+                    searchQueries.push({ [mappedField]: regex } as FilterQuery<ISlot>);
                 });
             });
             if (searchQueries.length > 0) {
@@ -500,7 +504,9 @@ export const getTodaySlots = async (req: Request, res: Response, next: NextFunct
             }
         });
 
-        const aggregationResult = await db.models[COLLECTIONS.SLOT].aggregate(pipeline);
+        const aggregationResult = await db.models[COLLECTIONS.SLOT].aggregate(pipeline, {
+            collation: { locale: "en", strength: 2 }
+        });
 
         const tableData = aggregationResult[0].data || [];
         const totalCount = aggregationResult[0].metadata[0]?.total || 0;

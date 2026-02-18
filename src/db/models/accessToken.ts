@@ -74,6 +74,7 @@ export const AccessTokenSchema: Schema = new Schema(
 );
 // Create a compound unique index on countryCode and phone
 AccessTokenSchema.index({ createdAt: 1 }, { expireAfterSeconds: TOKEN_EXPIRY * 60 });
+AccessTokenSchema.index({ _id: 1 }, { unique: true });
 
 export const AccessTokenModel: Model<IAccessTokenModel> = model<IAccessTokenModel>(
   COLLECTIONS.ACCESS_TOKEN,

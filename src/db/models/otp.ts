@@ -1,4 +1,4 @@
-import { Document, Schema, Model, model, SchemaOptions, Types } from "mongoose";
+import { Schema, Model, model, SchemaOptions } from "mongoose";
 import { config } from "../../config/v1/config";
 import { COLLECTIONS } from "../../utils/v1/constants";
 import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
