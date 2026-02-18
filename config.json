@@ -1,7 +1,7 @@
 {
   "development": {
     "PORT": 7002,
-    "SWAGGER_URLS": "https://dev1.exeloncircuits.com,http://localhost:7003",
+    "SWAGGER_URLS": "https://smart-water-delivery.vercel.app,http://localhost:7003",
     "OTP_EXPIRY": 10,
     "ACCESS_TOKEN_EXPIRY": 43200,
     "REFRESH_TOKEN_EXPIRY": 5256000,
