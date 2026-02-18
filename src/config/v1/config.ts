@@ -22,12 +22,7 @@ interface Config {
   STORAGE_SERVICE: string;
   S3_REGION: string;
   S3_BUCKET: string;
-  AWS_ACCESS_KEY_ID: string;
-  AWS_SECRET_ACCESS_KEY: string;
   SIGNEDURL_EXPIRY: number;
-  MESSAGE_SERVICE: string;
-  WHATSAPP_API_URL: string;
-  WHATSAPP_AUTH_TOKEN: string;
   SEED: {
     SUPER_ADMIN: {
       NAME: string;
@@ -51,11 +46,11 @@ function getConfigVariable(key: string, mandatory = true): string {
 
   // Handle nested property access using dot notation
   const keys = key.split('.');
-  let value: any = envConfig;
+  let value: unknown = envConfig;
 
   for (const k of keys) {
-    if (value && typeof value === 'object' && k in value) {
-      value = value[k];
+    if (value && typeof value === 'object' && k in (value as Record<string, unknown>)) {
+      value = (value as Record<string, unknown>)[k];
     } else {
       value = undefined;
       break;
@@ -82,12 +77,7 @@ export const config: Config = {
   STORAGE_SERVICE: getConfigVariable("STORAGE_SERVICE", true),
   S3_REGION: getConfigVariable("S3_REGION", true),
   S3_BUCKET: getConfigVariable("S3_BUCKET", true),
-  AWS_ACCESS_KEY_ID: getEnvVariable("AWS_ACCESS_KEY_ID", true),
-  AWS_SECRET_ACCESS_KEY: getEnvVariable("AWS_SECRET_ACCESS_KEY", true),
   SIGNEDURL_EXPIRY: Number(getEnvVariable("SIGNEDURL_EXPIRY", false)) || Number(getConfigVariable("SIGNEDURL_EXPIRY", true)),
-  MESSAGE_SERVICE: getEnvVariable("MESSAGE_SERVICE", true),
-  WHATSAPP_API_URL: getEnvVariable("WHATSAPP_API_URL", true),
-  WHATSAPP_AUTH_TOKEN: getEnvVariable("WHATSAPP_AUTH_TOKEN", true),
   SEED: {
     SUPER_ADMIN: {
       NAME: getConfigVariable("SEED.SUPER_ADMIN.NAME", false) || "SUPER ADMIN",

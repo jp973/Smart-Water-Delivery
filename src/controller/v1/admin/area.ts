@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { FilterQuery, SortOrder } from "mongoose";
+import { FilterQuery, SortOrder, PipelineStage } from "mongoose";
 import { COLLECTIONS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
 import { IArea } from "../../../utils/v1/customTypes";
@@ -241,7 +241,7 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
         const limit = typeof options.itemsPerPage === 'string' ? parseInt(options.itemsPerPage) : (options.itemsPerPage || 10);
         const skip = (page - 1) * limit;
 
-        const sort: { [key: string]: SortOrder } = {};
+        const sort: Record<string, 1 | -1> = {};
         if (options.sortBy && Array.isArray(options.sortBy)) {
             options.sortBy.forEach((field: string, index: number) => {
                 sort[field] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
@@ -250,12 +250,85 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
             sort.createdAt = -1;
         }
 
-        const data = await db.models[COLLECTIONS.AREA].find(query, project)
-            .sort(sort)
-            .skip(skip)
-            .limit(limit);
+        const pipeline: PipelineStage[] = [
+            { $match: query },
+            {
+                $lookup: {
+                    from: COLLECTIONS.USER,
+                    localField: "_id",
+                    foreignField: "address.area",
+                    as: "users"
+                }
+            },
+            {
+                $addFields: {
+                    totalCustomer: { $size: "$users" },
+                    totalLiters: {
+                        $reduce: {
+                            input: "$users",
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+                        }
+                    }
+                }
+            }
+        ];
 
-        const totalCount = await db.models[COLLECTIONS.AREA].countDocuments(query);
+        // Apply projection if provided
+        const finalProject: Record<string, number> = { users: 0 };
+        if (project && Object.keys(project).length > 0) {
+            Object.assign(finalProject, project);
+        }
+
+        pipeline.push({
+            $facet: {
+                metadata: [{ $count: "total" }],
+                data: [
+                    { $sort: sort },
+                    { $skip: skip },
+                    { $limit: limit },
+                    { $project: finalProject }
+                ]
+            }
+        });
+
+        const aggregationResult = await db.models[COLLECTIONS.AREA].aggregate(pipeline, {
+            collation: { locale: "en", strength: 2 }
+        });
+
+        const data = aggregationResult[0].data || [];
+        const totalCount = aggregationResult[0].metadata[0]?.total || 0;
+
+        // Overall Summary Calculation
+        const summaryPipeline: PipelineStage[] = [
+            { $match: query },
+            {
+                $lookup: {
+                    from: COLLECTIONS.USER,
+                    localField: "_id",
+                    foreignField: "address.area",
+                    as: "users"
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCustomers: { $sum: { $size: "$users" } },
+                    totalLiters: {
+                        $sum: {
+                            $reduce: {
+                                input: "$users",
+                                initialValue: 0,
+                                in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+                            }
+                        }
+                    }
+                }
+            }
+        ];
+
+        const summaryResult = await db.models[COLLECTIONS.AREA].aggregate(summaryPipeline);
+        const summary = summaryResult[0] || { totalCustomers: 0, totalLiters: 0 };
 
         req.apiStatus = {
             isSuccess: true,
@@ -263,6 +336,8 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
             status: 200,
             data: {
                 totalCount,
+                totalCustomers: summary.totalCustomers.toString(),
+                totalLiters: summary.totalLiters.toString(),
                 tableData: data,
             },
             toastMessage: null,

@@ -1,14 +1,16 @@
-import { Connection, Document, ObjectId, Schema, Types } from "mongoose";
+import { Connection, Document, Types } from "mongoose";
 
 
 import { DBModels } from "../../db/models";
-import { COLLECTIONS, EXTRA_REQUEST_STATUS, SLOT_STATUS, SUBSCRIPTION_STATUS, USER_ROLES } from "./constants";
+import { EXTRA_REQUEST_STATUS, SLOT_STATUS, SUBSCRIPTION_STATUS, USER_ROLES } from "./constants";
 import { Logger } from "pino";
 
 
 export interface IUser {
   name?: string;
   username?: string;
+  email?: string;
+  password?: string;
   countryCode?: string;
   phone?: string;
   address: {
@@ -41,6 +43,8 @@ export interface IArea {
   city: string;
   pincode: string;
   isDeleted?: boolean;
+  totalCustomer?: number;
+  totalLiters?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -51,8 +55,8 @@ export interface IAreaModel extends Omit<IArea, "_id">, Document {
 
 export interface IAdmin {
   _id?: Types.ObjectId | string;
-  phone: string;
-  countryCode: string;
+  email: string;
+  password?: string;
   name: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -108,8 +112,9 @@ export interface ISlotSubscriptionModel extends Omit<ISlotSubscription, "_id">, 
 export interface IOtp {
   _id?: Types.ObjectId | string;
   otp: string;
-  phone: string;
-  countryCode: string;
+  phone?: string;
+  countryCode?: string;
+  email?: string;
   isVerified: boolean;
   createdAt?: Date;
   updatedAt?: Date;

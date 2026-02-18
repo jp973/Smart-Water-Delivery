@@ -347,7 +347,9 @@ export const getAllSlot = async (req: Request, res: Response, next: NextFunction
         const aggregationSort: Record<string, 1 | -1> = {};
         if (options.sortBy && Array.isArray(options.sortBy)) {
             options.sortBy.forEach((field: string, index: number) => {
-                aggregationSort[field] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
+                let sortField = field;
+                if (field === "area") sortField = "areaId.name";
+                aggregationSort[sortField] = options.sortDesc && options.sortDesc[index] ? -1 : 1;
             });
         } else {
             aggregationSort.createdAt = -1;
@@ -436,7 +438,7 @@ export const getAllSlot = async (req: Request, res: Response, next: NextFunction
                     ]
                 }
             }
-        ]) as AggregationFacetResult[];
+        ], { collation: { locale: "en", strength: 2 } }) as AggregationFacetResult[];
 
         const data: AggregatedSlot[] = aggregationResult[0].data || [];
         const totalCount: number = aggregationResult[0].metadata[0]?.total || 0;

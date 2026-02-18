@@ -1,4 +1,4 @@
-import { Document, Schema, Model, model, SchemaOptions, Types } from "mongoose";
+import { Schema, Model, model, SchemaOptions } from "mongoose";
 import { config } from "../../config/v1/config";
 import { COLLECTIONS } from "../../utils/v1/constants";
 import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
@@ -19,12 +19,16 @@ import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
  *           description: The one-time password value
  *         phone:
  *           type: string
- *           description: Phone number the OTP was sent to
+ *           description: Phone number the OTP was sent to (optional when using email OTP)
  *           example: "9876543210"
  *         countryCode:
  *           type: string
- *           description: Country code for the phone number
+ *           description: Country code for the phone number (optional when using email OTP)
  *           example: "91"
+ *         email:
+ *           type: string
+ *           description: Email the OTP was sent to (used for forgot password)
+ *           example: "user@example.com"
  *         isVerified:
  *           type: boolean
  *           description: Indicates if the OTP was verified
@@ -42,8 +46,9 @@ import { IOtp, IOtpModel } from "../../utils/v1/customTypes";
 export const OtpSchema: Schema = new Schema(
   {
     otp: { type: String, required: true },
-    phone: { type: String, required: true, trim: true },
-    countryCode: { type: String, required: true, trim: true },
+    phone: { type: String, required: false, trim: true },
+    countryCode: { type: String, required: false, trim: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
     isVerified: { type: Boolean, default: false },
   },
   {

@@ -1,4 +1,4 @@
-import { Document, Schema, Model, model, SchemaOptions, Types } from "mongoose";
+import { Schema, Model, model, SchemaOptions } from "mongoose";
 import { COLLECTIONS, EXTRA_REQUEST_STATUS, SUBSCRIPTION_STATUS } from "../../utils/v1/constants";
 import { config } from "../../config/v1/config";
 import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
@@ -49,7 +49,7 @@ import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
  *           format: date-time
  */
 
-import { ISlotSubscription, ISlotSubscriptionModel } from "../../utils/v1/customTypes";
+import { ISlotSubscriptionModel } from "../../utils/v1/customTypes";
 
 export const SlotSubscriptionSchema: Schema = new Schema(
     {

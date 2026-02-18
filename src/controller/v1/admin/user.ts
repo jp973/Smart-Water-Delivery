@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import { FilterQuery, SortOrder, Types } from "mongoose";
-import { COLLECTIONS } from "../../../utils/v1/constants";
+import { FilterQuery, SortOrder, Types, PipelineStage } from "mongoose";
+import { COLLECTIONS, SUBSCRIPTION_STATUS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
-import { IUserModel, IUser, IArea } from "../../../utils/v1/customTypes";
+import { IUserModel, IUser, IArea, ISlotSubscription } from "../../../utils/v1/customTypes";
+import bcrypt from "bcryptjs";
 
 const userLogger = logger.child({ module: "user" });
 
@@ -24,6 +25,8 @@ interface GetAllOptions {
 interface AggregatedUser extends IUser {
     _id: Types.ObjectId;
     areaId?: IArea;
+    lastSubscription?: ISlotSubscription[];
+    lastDeliveryDate?: string;
 }
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -31,29 +34,31 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     const actionLogger = userLogger.child({ action: "createUser", txId });
 
     try {
-        const { name, countryCode, phone, address, waterQuantity, notes } = req.body;
+        const { name, email, password, countryCode, phone, address, waterQuantity, notes } = req.body;
         const db = req.db;
 
-        // Check for duplicate phone & countryCode
         const existingUser = await db.models[COLLECTIONS.USER].findOne({
-            countryCode,
-            phone,
+            $or: [{ email: email?.toLowerCase?.() }, { phone, countryCode }],
             isDeleted: false,
         });
 
         if (existingUser) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "User with this phone number already exists",
+                message: "User with this email or phone number already exists",
                 status: 409,
                 data: {},
-                toastMessage: "User with this phone number already exists",
+                toastMessage: "User with this email or phone number already exists",
             };
             return next();
         }
 
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         const newUser: IUserModel = new db.models[COLLECTIONS.USER]({
             name,
+            email: email?.toLowerCase?.(),
+            password: hashedPassword,
             countryCode,
             phone,
             address,
@@ -93,12 +98,35 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
     try {
         const db = req.db;
-        const updateData = req.body;
+        const updateData = { ...req.body } as Partial<IUser>;
+
+        if (updateData.email) {
+            updateData.email = updateData.email.toLowerCase();
+            const emailClash = await db.models[COLLECTIONS.USER].findOne({
+                _id: { $ne: id },
+                email: updateData.email,
+                isDeleted: false,
+            });
+            if (emailClash) {
+                req.apiStatus = {
+                    isSuccess: false,
+                    message: "User with this email already exists",
+                    status: 409,
+                    data: {},
+                    toastMessage: "User with this email already exists",
+                };
+                return next();
+            }
+        }
+
+        if (updateData.password) {
+            updateData.password = await bcrypt.hash(updateData.password, 10);
+        }
 
         const updatedUser = await db.models[COLLECTIONS.USER].findOneAndUpdate(
             { _id: id, isDeleted: false },
             { $set: updateData },
-            { new: true },
+            { new: true, projection: { password: 0 } },
         );
 
         if (!updatedUser) {
@@ -201,7 +229,38 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
                     as: "areaId"
                 }
             },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
+            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: COLLECTIONS.SLOT_SUBSCRIPTION,
+                    localField: "_id",
+                    foreignField: "customerId",
+                    pipeline: [
+                        { $match: { status: SUBSCRIPTION_STATUS.DELIVERED, isDeleted: false } },
+                        { $sort: { deliveredAt: -1 } },
+                        { $limit: 1 }
+                    ],
+                    as: "lastSubscription"
+                }
+            },
+            {
+                $addFields: {
+                    lastDeliveryDate: { $ifNull: [{ $arrayElemAt: ["$lastSubscription.deliveredAt", 0] }, ""] }
+                }
+            },
+            {
+                $project: {
+                    isEnabled: 0,
+                    isVerified: 0,
+                    isDeleted: 0,
+                    createdAt: 0,
+                    updatedAt: 0,
+                    "areaId.isDeleted": 0,
+                    "areaId.createdAt": 0,
+                    "areaId.updatedAt": 0,
+                    lastSubscription: 0,
+                },
+            },
         ]) as AggregatedUser[];
 
         const user = results.length > 0 ? results[0] : null;
@@ -272,7 +331,9 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const aggregationSort: Record<string, 1 | -1> = {};
         if (sortBy && sortBy.length > 0) {
             sortBy.forEach((field: string, index: number) => {
-                aggregationSort[field] = sortDesc[index] ? -1 : 1;
+                let sortField = field;
+                if (field === "area") sortField = "areaId.name";
+                aggregationSort[sortField] = sortDesc[index] ? -1 : 1;
             });
         } else {
             aggregationSort.createdAt = -1;
@@ -287,34 +348,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             query["address.area"] = new Types.ObjectId(areaId as string);
         }
 
-        // Handle complex search array
-        if (search && search.length > 0) {
-            const searchQueries: FilterQuery<IUserModel>[] = [];
-
-            search.forEach((s: SearchItem) => {
-                const { term, fields, startsWith, endsWith } = s;
-                if (term && fields && fields.length > 0) {
-                    let regexStr = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape regex
-                    if (startsWith) regexStr = `^${regexStr}`;
-                    if (endsWith) regexStr = `${regexStr}$`;
-                    const regex = new RegExp(regexStr, "i");
-
-                    const fieldQueries = fields.map((field: string) => ({
-                        [field]: { $regex: regex },
-                    }));
-
-                    if (fieldQueries.length > 0) {
-                        searchQueries.push({ $or: fieldQueries });
-                    }
-                }
-            });
-
-            if (searchQueries.length > 0) {
-                query.$and = searchQueries;
-            }
-        }
-
-        const pipeline: any[] = [
+        const pipeline: PipelineStage[] = [
             { $match: query },
             {
                 $lookup: {
@@ -324,8 +358,62 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                     as: "areaId"
                 }
             },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
+            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: COLLECTIONS.SLOT_SUBSCRIPTION,
+                    localField: "_id",
+                    foreignField: "customerId",
+                    pipeline: [
+                        { $match: { status: SUBSCRIPTION_STATUS.DELIVERED, isDeleted: false } },
+                        { $sort: { deliveredAt: -1 } },
+                        { $limit: 1 }
+                    ],
+                    as: "lastSubscription"
+                }
+            },
+            {
+                $addFields: {
+                    lastDeliveryDate: { $ifNull: [{ $arrayElemAt: ["$lastSubscription.deliveredAt", 0] }, ""] }
+                }
+            }
         ];
+
+        // Handle complex search array after lookup to support area fields
+        if (search && search.length > 0) {
+            const searchOrQueries: PipelineStage.Match["$match"][] = [];
+
+            search.forEach((s: SearchItem) => {
+                const { term, fields, startsWith, endsWith } = s;
+                if (term && fields && fields.length > 0) {
+                    let regexStr = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    if (startsWith) regexStr = `^${regexStr}`;
+                    if (endsWith) regexStr = `${regexStr}$`;
+                    const regex = new RegExp(regexStr, "i");
+
+                    fields.forEach((field: string) => {
+                        if (field === "waterQuantity") {
+                            // Support regex search on numeric waterQuantity
+                            searchOrQueries.push({
+                                $expr: {
+                                    $regexMatch: {
+                                        input: { $toString: "$waterQuantity" },
+                                        regex: regexStr,
+                                        options: "i"
+                                    }
+                                }
+                            } as FilterQuery<IUserModel>); // Use proper type for complex $expr in match
+                        } else {
+                            searchOrQueries.push({ [field]: { $regex: regex } });
+                        }
+                    });
+                }
+            });
+
+            if (searchOrQueries.length > 0) {
+                pipeline.push({ $match: { $or: searchOrQueries } });
+            }
+        }
 
         // Apply projection if provided (root level only for now to match find behavior)
         if (project && Object.keys(project).length > 0) {
@@ -338,7 +426,20 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                 data: [
                     { $sort: aggregationSort },
                     { $skip: skip },
-                    { $limit: limit }
+                    { $limit: limit },
+                    {
+                        $project: {
+                            isEnabled: 0,
+                            isVerified: 0,
+                            isDeleted: 0,
+                            createdAt: 0,
+                            updatedAt: 0,
+                            "areaId.isDeleted": 0,
+                            "areaId.createdAt": 0,
+                            "areaId.updatedAt": 0,
+                            lastSubscription: 0,
+                        },
+                    },
                 ]
             }
         });
@@ -346,6 +447,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const aggregationResult = await db.models[COLLECTIONS.USER].aggregate(pipeline, {
             collation: { locale: "en", strength: 2 }
         }) as AggregationFacetResult[];
+
 
         const data = aggregationResult[0].data || [];
         const totalCount = aggregationResult[0].metadata[0]?.total || 0;

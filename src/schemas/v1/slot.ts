@@ -139,3 +139,22 @@ export const getUserSlotHistorySchema = z.object({
         })).optional(),
     }).optional().default({ filters: {}, options: { page: 1, itemsPerPage: 10 } }),
 });
+
+export const getTodaySlotsSchema = z.object({
+    body: z.object({
+        filters: z.record(z.string(), z.unknown()).optional().default({}),
+        options: z.object({
+            page: z.number().int().positive().default(1),
+            itemsPerPage: z.number().int().positive().default(10),
+            sortBy: z.array(z.string()).optional(),
+            sortDesc: z.array(z.boolean()).optional(),
+        }).optional().default({ page: 1, itemsPerPage: 10 }),
+        project: z.record(z.string(), z.union([z.number(), z.boolean()])).optional(),
+        search: z.array(z.object({
+            term: z.string(),
+            fields: z.array(z.string()),
+            startsWith: z.boolean().optional(),
+            endsWith: z.boolean().optional(),
+        })).optional(),
+    }).optional().default({ filters: {}, options: { page: 1, itemsPerPage: 10 } }),
+});

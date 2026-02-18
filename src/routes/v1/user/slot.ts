@@ -36,6 +36,107 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Current slot fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Current slot fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     dashboardStat:
+ *                       type: object
+ *                       properties:
+ *                         thisMonthLiter:
+ *                           type: string
+ *                           example: "100L"
+ *                         missedDeliveries30Days:
+ *                           type: integer
+ *                           example: 0
+ *                         averageMonthlyLiter:
+ *                           type: string
+ *                           example: "100L"
+ *                     slot:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         date:
+ *                           type: string
+ *                           format: date-time
+ *                         startTime:
+ *                           type: string
+ *                           format: date-time
+ *                         endTime:
+ *                           type: string
+ *                           format: date-time
+ *                         areaId:
+ *                           type: object
+ *                         capacity:
+ *                           type: integer
+ *                         currentBookingsCount:
+ *                           type: integer
+ *                         bookingCutoffTime:
+ *                           type: string
+ *                           format: date-time
+ *                         status:
+ *                           type: string
+ *                     subscription:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         customerId:
+ *                           type: string
+ *                         slotId:
+ *                           type: string
+ *                         quantity:
+ *                           type: integer
+ *                         status:
+ *                           type: string
+ *                         extraQuantity:
+ *                           type: integer
+ *                         extraRequestStatus:
+ *                           type: string
+ *             example:
+ *               status: 200
+ *               message: "Current slot fetched successfully"
+ *               data:
+ *                 dashboardStat:
+ *                   thisMonthLiter: "100L"
+ *                   missedDeliveries30Days: 0
+ *                   averageMonthlyLiter: "100L"
+ *                 slot:
+ *                   _id: "6995da9e2d8a02e6d57fc8cf"
+ *                   date: "2026-02-19T00:00:00.000Z"
+ *                   startTime: "2026-02-19T09:00:00.000Z"
+ *                   endTime: "2026-02-19T11:00:00.000Z"
+ *                   areaId:
+ *                     _id: "6995d8b42d8a02e6d57fc8bd"
+ *                     name: "Mulki"
+ *                     description: "Residential area in the north"
+ *                     city: "mulki"
+ *                     pincode: "574154"
+ *                   capacity: 500
+ *                   currentBookingsCount: 100
+ *                   bookingCutoffTime: "2026-02-19T08:00:00.000Z"
+ *                   status: "Available"
+ *                 subscription:
+ *                   _id: "6995da9e2d8a02e6d57fc8d2"
+ *                   customerId: "6995d94e2d8a02e6d57fc8c2"
+ *                   slotId: "6995da9e2d8a02e6d57fc8cf"
+ *                   quantity: 80
+ *                   status: "Delivered"
+ *                   extraQuantity: 20
+ *                   extraRequestStatus: "Approved"
+ *                   deliveredAt: "2026-02-18T15:39:36.615Z"
+ *               toastMessage: null
  *       404:
  *         description: User area not found
  */
