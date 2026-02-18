@@ -275,7 +275,7 @@ router.post(
  * @swagger
  * /v1/user/auth/forgot/updatePassword:
  *   post:
- *     summary: Update password using verified OTP
+ *     summary: Update password after OTP verification
  *     tags: [User/Auth]
  *     requestBody:
  *       required: true
@@ -285,12 +285,9 @@ router.post(
  *             type: object
  *             required:
  *               - email
- *               - otp
  *               - newPassword
  *             properties:
  *               email:
- *                 type: string
- *               otp:
  *                 type: string
  *               newPassword:
  *                 type: string
@@ -298,7 +295,7 @@ router.post(
  *       200:
  *         description: Password updated successfully
  *       400:
- *         description: Invalid or unverified OTP
+ *         description: Email not verified or OTP session expired
  *       404:
  *         description: User not found
  */

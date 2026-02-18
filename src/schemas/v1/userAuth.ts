@@ -65,7 +65,6 @@ export const verifyForgotPasswordOTPSchema = z.object({
 export const updatePasswordWithOTPSchema = z.object({
     body: z.object({
         email: z.string().trim().email("Valid email is required"),
-        otp: z.string().trim().min(1, "OTP is required"),
         newPassword: z.string().min(6, "New password must be at least 6 characters"),
     }),
 });

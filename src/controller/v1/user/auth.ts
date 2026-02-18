@@ -535,22 +535,21 @@ export const updatePasswordWithOTP = async (req: Request, res: Response, next: N
 
     try {
         const email = normalizeEmail(req.body.email);
-        const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
         const newPasswordRaw = normalizePassword(req.body.newPassword);
 
         const db = req.db;
 
-        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({ email, otp, isVerified: true });
+        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({ email, isVerified: true });
 
         if (!otpDoc) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "Invalid or unverified OTP",
+                message: "Email not verified or OTP session expired",
                 status: 400,
                 data: {},
-                toastMessage: "Invalid or unverified OTP",
+                toastMessage: "Email not verified or OTP session expired",
             };
-            actionLogger.warn("OTP not verified for password update");
+            actionLogger.warn("Verified OTP not found for password update");
             return next();
         }
 
