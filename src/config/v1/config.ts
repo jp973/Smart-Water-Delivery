@@ -46,11 +46,11 @@ function getConfigVariable(key: string, mandatory = true): string {
 
   // Handle nested property access using dot notation
   const keys = key.split('.');
-  let value: any = envConfig;
+  let value: unknown = envConfig;
 
   for (const k of keys) {
-    if (value && typeof value === 'object' && k in value) {
-      value = value[k];
+    if (value && typeof value === 'object' && k in (value as Record<string, unknown>)) {
+      value = (value as Record<string, unknown>)[k];
     } else {
       value = undefined;
       break;

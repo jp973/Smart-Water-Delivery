@@ -39,7 +39,7 @@ import { IAdmin, IAdminModel } from "../../utils/v1/customTypes";
 
 export const AdminSchema: Schema = new Schema(
   {
-    email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
     password: { type: String, required: true },
     name: { type: String, required: false, trim: true, default: "" },
   },
@@ -51,6 +51,7 @@ export const AdminSchema: Schema = new Schema(
 
 AdminSchema.set("toObject", { virtuals: true });
 AdminSchema.set("toJSON", { virtuals: true });
+AdminSchema.index({ _id: 1, email: 1 }, { unique: true });
 
 export const AdminModel: Model<IAdminModel> = model<IAdminModel>(COLLECTIONS.ADMIN, AdminSchema);
 

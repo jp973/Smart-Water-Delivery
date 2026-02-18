@@ -15,14 +15,125 @@ export const getCurrentSlot = async (req: Request, res: Response, next: NextFunc
         const db = req.db;
         const now = new Date();
 
-        // 1. Get the user's areaId
+        // 1. Calculate Dashboard Stats (Always included in response)
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+
+        const statsAggregation = await db.models[COLLECTIONS.SLOT_SUBSCRIPTION].aggregate([
+            {
+                $match: {
+                    customerId: new mongoose.Types.ObjectId(userId as string),
+                    isDeleted: false
+                }
+            },
+            {
+                $lookup: {
+                    from: COLLECTIONS.SLOT,
+                    localField: "slotId",
+                    foreignField: "_id",
+                    as: "slot"
+                }
+            },
+            { $unwind: "$slot" },
+            {
+                $facet: {
+                    thisMonth: [
+                        {
+                            $match: {
+                                status: SUBSCRIPTION_STATUS.DELIVERED,
+                                "slot.date": { $gte: monthStart, $lte: monthEnd }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                total: {
+                                    $sum: {
+                                        $add: [
+                                            { $ifNull: ["$quantity", 0] },
+                                            {
+                                                $cond: [
+                                                    { $eq: ["$extraRequestStatus", EXTRA_REQUEST_STATUS.APPROVED] },
+                                                    { $ifNull: ["$extraQuantity", 0] },
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    missed30Days: [
+                        {
+                            $match: {
+                                status: SUBSCRIPTION_STATUS.MISSED,
+                                "slot.date": { $gte: thirtyDaysAgo }
+                            }
+                        },
+                        { $count: "count" }
+                    ],
+                    averageMonthly: [
+                        {
+                            $match: {
+                                status: SUBSCRIPTION_STATUS.DELIVERED
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: {
+                                    year: { $year: "$slot.date" },
+                                    month: { $month: "$slot.date" }
+                                },
+                                monthlyTotal: {
+                                    $sum: {
+                                        $add: [
+                                            { $ifNull: ["$quantity", 0] },
+                                            {
+                                                $cond: [
+                                                    { $eq: ["$extraRequestStatus", EXTRA_REQUEST_STATUS.APPROVED] },
+                                                    { $ifNull: ["$extraQuantity", 0] },
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            $group: {
+                                _id: null,
+                                avgLiters: { $avg: "$monthlyTotal" }
+                            }
+                        }
+                    ]
+                }
+            }
+        ]);
+
+        const results = statsAggregation[0];
+        const thisMonthLiterVal = results.thisMonth[0]?.total || 0;
+        const missedDeliveries30Days = results.missed30Days[0]?.count || 0;
+        const averageMonthlyLiterVal = Math.round(results.averageMonthly[0]?.avgLiters || 0);
+
+        const dashboardStat = {
+            thisMonthLiter: `${thisMonthLiterVal}L`,
+            missedDeliveries30Days,
+            averageMonthlyLiter: `${averageMonthlyLiterVal}L`
+        };
+
+        // 2. Get the user's areaId
         const user = await db.models[COLLECTIONS.USER].findOne({ _id: userId, isDeleted: false }, "address.area").lean();
         if (!user || !user.address?.area) {
             req.apiStatus = {
                 isSuccess: false,
                 message: "User area not found. Please update your profile.",
                 status: 404,
-                data: {},
+                data: {
+                    dashboardStat
+                },
                 toastMessage: "Area not found in profile",
             };
             return next();
@@ -149,7 +260,11 @@ export const getCurrentSlot = async (req: Request, res: Response, next: NextFunc
                 isSuccess: true,
                 message: "No upcoming slots found for your area",
                 status: 200,
-                data: null,
+                data: {
+                    dashboardStat,
+                    slot: null,
+                    subscription: null,
+                },
                 toastMessage: null,
             };
             return next();
@@ -163,7 +278,11 @@ export const getCurrentSlot = async (req: Request, res: Response, next: NextFunc
                 isSuccess: true,
                 message: "No active slot subscriptions found (slots might be cancelled)",
                 status: 200,
-                data: null,
+                data: {
+                    dashboardStat,
+                    slot: null,
+                    subscription: null,
+                },
                 toastMessage: null,
             };
             return next();
@@ -178,6 +297,7 @@ export const getCurrentSlot = async (req: Request, res: Response, next: NextFunc
             message: "Current slot fetched successfully",
             status: 200,
             data: {
+                dashboardStat,
                 slot: currentSlot,
                 subscription: userSubscription,
             },
@@ -274,12 +394,13 @@ export const requestExtraQuantity = async (req: Request, res: Response, next: Ne
 
     try {
         const db = req.db;
+        const now = new Date();
 
         const subscription = await db.models[COLLECTIONS.SLOT_SUBSCRIPTION].findOne({
             _id: subscriptionId,
             customerId: userId,
             isDeleted: false,
-        });
+        }).populate("slotId");
 
         if (!subscription) {
             req.apiStatus = {
@@ -288,6 +409,18 @@ export const requestExtraQuantity = async (req: Request, res: Response, next: Ne
                 status: 404,
                 data: {},
                 toastMessage: "Subscription not found",
+            };
+            return next();
+        }
+
+        const slot = subscription.slotId as unknown as ISlot;
+        if (now > new Date(slot.bookingCutoffTime)) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Extra water quantity request period has ended for this slot.",
+                status: 400,
+                data: {},
+                toastMessage: "Request period expired",
             };
             return next();
         }
@@ -418,7 +551,7 @@ export const getUserSlotHistory = async (req: Request, res: Response, next: Next
                     ]
                 }
             }
-        ]);
+        ], { collation: { locale: "en", strength: 2 } });
 
         const subscriptions = (aggregationResult[0].data || []) as (Omit<ISlotSubscription, "slotId"> & { slotId: Omit<ISlot, "areaId"> & { areaId: { name: string } } })[];
         const totalCount = aggregationResult[0].metadata[0]?.total || 0;

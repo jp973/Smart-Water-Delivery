@@ -251,53 +251,53 @@ export const getAllArea = async (req: Request, res: Response, next: NextFunction
         }
 
         const pipeline: PipelineStage[] = [
-            { $match: query }
-        ];
-
-        // Handle Search (already added to query)
-
-        // Handle Sorting
-        pipeline.push({ $sort: sort });
-
-        // Handle Pagination (Apply after calculating stats if we want to skip/limit the results)
-        // However, we usually skip/limit the data but we also need totalCount.
-
-        // Lookup users for each area
-        pipeline.push({
-            $lookup: {
-                from: COLLECTIONS.USER,
-                localField: "_id",
-                foreignField: "address.area",
-                as: "users"
-            }
-        });
-
-        // Calculate stats
-        pipeline.push({
-            $addFields: {
-                totalCustomer: { $size: "$users" },
-                totalLiters: {
-                    $reduce: {
-                        input: "$users",
-                        initialValue: 0,
-                        in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+            { $match: query },
+            {
+                $lookup: {
+                    from: COLLECTIONS.USER,
+                    localField: "_id",
+                    foreignField: "address.area",
+                    as: "users"
+                }
+            },
+            {
+                $addFields: {
+                    totalCustomer: { $size: "$users" },
+                    totalLiters: {
+                        $reduce: {
+                            input: "$users",
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $ifNull: ["$$this.waterQuantity", 0] }] }
+                        }
                     }
                 }
             }
-        });
+        ];
 
-        // Pagination and Projection
-        const dataPipeline = [...pipeline];
-        dataPipeline.push({ $skip: skip });
-        dataPipeline.push({ $limit: limit });
-        if (Object.keys(project).length > 0) {
-            dataPipeline.push({ $project: { ...project, users: 0 } });
-        } else {
-            dataPipeline.push({ $project: { users: 0 } });
+        // Apply projection if provided
+        const finalProject: Record<string, number> = { users: 0 };
+        if (project && Object.keys(project).length > 0) {
+            Object.assign(finalProject, project);
         }
 
-        const data = await db.models[COLLECTIONS.AREA].aggregate<IArea>(dataPipeline);
-        const totalCount = await db.models[COLLECTIONS.AREA].countDocuments(query);
+        pipeline.push({
+            $facet: {
+                metadata: [{ $count: "total" }],
+                data: [
+                    { $sort: sort },
+                    { $skip: skip },
+                    { $limit: limit },
+                    { $project: finalProject }
+                ]
+            }
+        });
+
+        const aggregationResult = await db.models[COLLECTIONS.AREA].aggregate(pipeline, {
+            collation: { locale: "en", strength: 2 }
+        });
+
+        const data = aggregationResult[0].data || [];
+        const totalCount = aggregationResult[0].metadata[0]?.total || 0;
 
         // Overall Summary Calculation
         const summaryPipeline: PipelineStage[] = [

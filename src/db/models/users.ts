@@ -1,5 +1,6 @@
-import { Document, Schema, SchemaOptions, Types } from "mongoose";
+import { Schema, SchemaOptions } from "mongoose";
 import { COLLECTIONS } from "../../utils/v1/constants";
+import { email } from "zod";
 
 
 /**
@@ -78,13 +79,11 @@ import { COLLECTIONS } from "../../utils/v1/constants";
  *          example: "2024-12-10T09:30:45.123Z"
  */
 
-import { IUser, IUserWithId, IUserModel } from "../../utils/v1/customTypes";
-
 export const UserSchema: Schema = new Schema(
   {
     name: { type: String, trim: true },
     username: { type: String },
-    email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
     password: { type: String, required: true },
     phone: { type: String, required: true },
     countryCode: { type: String, required: true },
@@ -110,6 +109,6 @@ export const UserSchema: Schema = new Schema(
   } as SchemaOptions,
 );
 
-UserSchema.index({ countryCode: 1, phone: 1 }, { unique: true });
+UserSchema.index({ phone: 1, email: 1 }, { unique: true });
 UserSchema.set("toObject", { virtuals: true });
 UserSchema.set("toJSON", { virtuals: true });

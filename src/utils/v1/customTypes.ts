@@ -1,8 +1,8 @@
-import { Connection, Document, ObjectId, Schema, Types } from "mongoose";
+import { Connection, Document, Types } from "mongoose";
 
 
 import { DBModels } from "../../db/models";
-import { COLLECTIONS, EXTRA_REQUEST_STATUS, SLOT_STATUS, SUBSCRIPTION_STATUS, USER_ROLES } from "./constants";
+import { EXTRA_REQUEST_STATUS, SLOT_STATUS, SUBSCRIPTION_STATUS, USER_ROLES } from "./constants";
 import { Logger } from "pino";
 
 

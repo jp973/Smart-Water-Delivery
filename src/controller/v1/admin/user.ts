@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { FilterQuery, SortOrder, Types, PipelineStage } from "mongoose";
 import { COLLECTIONS, SUBSCRIPTION_STATUS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
-import { IUserModel, IUser, IArea } from "../../../utils/v1/customTypes";
+import { IUserModel, IUser, IArea, ISlotSubscription } from "../../../utils/v1/customTypes";
 import bcrypt from "bcryptjs";
 
 const userLogger = logger.child({ module: "user" });
@@ -25,7 +25,7 @@ interface GetAllOptions {
 interface AggregatedUser extends IUser {
     _id: Types.ObjectId;
     areaId?: IArea;
-    lastSubscription?: any[];
+    lastSubscription?: ISlotSubscription[];
     lastDeliveryDate?: string;
 }
 
@@ -331,7 +331,9 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const aggregationSort: Record<string, 1 | -1> = {};
         if (sortBy && sortBy.length > 0) {
             sortBy.forEach((field: string, index: number) => {
-                aggregationSort[field] = sortDesc[index] ? -1 : 1;
+                let sortField = field;
+                if (field === "area") sortField = "areaId.name";
+                aggregationSort[sortField] = sortDesc[index] ? -1 : 1;
             });
         } else {
             aggregationSort.createdAt = -1;
@@ -400,7 +402,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                                         options: "i"
                                     }
                                 }
-                            } as any); // Cast as any for complex $expr in match
+                            } as FilterQuery<IUserModel>); // Use proper type for complex $expr in match
                         } else {
                             searchOrQueries.push({ [field]: { $regex: regex } });
                         }
