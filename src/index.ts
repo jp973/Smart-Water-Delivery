@@ -81,6 +81,10 @@ app.use(express.static("public"));
 
 app.use(attachLogger());
 
+app.get("/", (req: Request, res: Response) => {
+  res.status(200).json({ message: "Smart Water Delivery API is running!", status: "Healthy" });
+});
+
 importBaseRoutes(app)
 
 app.use(function (req: Request, res: Response, next: NextFunction): void {
