@@ -105,10 +105,6 @@ export interface ISlotSubscriptionModel extends Omit<ISlotSubscription, "_id">, 
   _id: Types.ObjectId;
 }
 
-export interface ISlotSubscriptionModel extends Omit<ISlotSubscription, "_id">, Document {
-  _id: Types.ObjectId;
-}
-
 export interface IOtp {
   _id?: Types.ObjectId | string;
   otp: string;
