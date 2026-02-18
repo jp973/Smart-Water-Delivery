@@ -17,6 +17,14 @@ import { COLLECTIONS } from "../../utils/v1/constants";
  *          type: string
  *          description: Full name of the user
  *          example: "Shashank"
+ *        email:
+ *          type: string
+ *          description: Email of the user
+ *          example: "user@example.com"
+ *        password:
+ *          type: string
+ *          description: Hashed password of the user (never returned in responses)
+ *          example: "$2b$10$..."
  *        countryCode:
  *          type: string
  *          description: Country code of the user's phone number
@@ -76,6 +84,8 @@ export const UserSchema: Schema = new Schema(
   {
     name: { type: String, trim: true },
     username: { type: String },
+    email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    password: { type: String, required: true },
     phone: { type: String, required: true },
     countryCode: { type: String, required: true },
     address: {

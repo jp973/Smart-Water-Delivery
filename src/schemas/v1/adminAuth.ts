@@ -1,17 +1,9 @@
 import { z } from "zod";
 
-export const sendAdminOTPSchema = z.object({
+export const adminLoginSchema = z.object({
     body: z.object({
-        countryCode: z.string().trim().min(1, "Country code is required"),
-        phone: z.string().trim().min(1, "Phone number is required"),
-    }),
-});
-
-export const verifyAdminOTPSchema = z.object({
-    body: z.object({
-        countryCode: z.string().trim().min(1, "Country code is required"),
-        phone: z.string().trim().min(1, "Phone number is required"),
-        otp: z.string().trim().min(1, "OTP is required"),
+        email: z.string().trim().email("Valid email is required"),
+        password: z.string().min(6, "Password is required"),
     }),
 });
 

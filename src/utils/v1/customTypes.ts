@@ -9,6 +9,8 @@ import { Logger } from "pino";
 export interface IUser {
   name?: string;
   username?: string;
+  email?: string;
+  password?: string;
   countryCode?: string;
   phone?: string;
   address: {
@@ -53,8 +55,8 @@ export interface IAreaModel extends Omit<IArea, "_id">, Document {
 
 export interface IAdmin {
   _id?: Types.ObjectId | string;
-  phone: string;
-  countryCode: string;
+  email: string;
+  password?: string;
   name: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -110,8 +112,9 @@ export interface ISlotSubscriptionModel extends Omit<ISlotSubscription, "_id">, 
 export interface IOtp {
   _id?: Types.ObjectId | string;
   otp: string;
-  phone: string;
-  countryCode: string;
+  phone?: string;
+  countryCode?: string;
+  email?: string;
   isVerified: boolean;
   createdAt?: Date;
   updatedAt?: Date;

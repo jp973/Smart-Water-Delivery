@@ -14,15 +14,17 @@ import { attachLogger } from "./utils/v1/logger";
 
 const port: number = config.PORT;
 
-(async () => {
-  try {
-    await initializeAllDBConnections();
-    console.info("Database connections initialized successfully.");
-    console.info("Seed data initialized successfully.");
-  } catch (err) {
-    console.error(err);
-  }
-})();
+if (process.env.NODE_ENV !== "test") {
+  (async () => {
+    try {
+      await initializeAllDBConnections();
+      console.info("Database connections initialized successfully.");
+      console.info("Seed data initialized successfully.");
+    } catch (err) {
+      console.error(err);
+    }
+  })();
+}
 
 const app = express();
 
@@ -71,9 +73,11 @@ app.use(function (req: Request, res: Response, next: NextFunction): void {
   next(err);
 });
 
-app.listen(port, () => {
-  console.info(`Server is running on port ${port} in ${app.get("env")} mode`);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(port, () => {
+    console.info(`Server is running on port ${port} in ${app.get("env")} mode`);
+  });
+}
 
 process.on("SIGINT", function () {
   process.exit(0);

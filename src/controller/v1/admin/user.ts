@@ -3,6 +3,7 @@ import { FilterQuery, SortOrder, Types, PipelineStage } from "mongoose";
 import { COLLECTIONS, SUBSCRIPTION_STATUS } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
 import { IUserModel, IUser, IArea } from "../../../utils/v1/customTypes";
+import bcrypt from "bcryptjs";
 
 const userLogger = logger.child({ module: "user" });
 
@@ -33,29 +34,31 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     const actionLogger = userLogger.child({ action: "createUser", txId });
 
     try {
-        const { name, countryCode, phone, address, waterQuantity, notes } = req.body;
+        const { name, email, password, countryCode, phone, address, waterQuantity, notes } = req.body;
         const db = req.db;
 
-        // Check for duplicate phone & countryCode
         const existingUser = await db.models[COLLECTIONS.USER].findOne({
-            countryCode,
-            phone,
+            $or: [{ email: email?.toLowerCase?.() }, { phone, countryCode }],
             isDeleted: false,
         });
 
         if (existingUser) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "User with this phone number already exists",
+                message: "User with this email or phone number already exists",
                 status: 409,
                 data: {},
-                toastMessage: "User with this phone number already exists",
+                toastMessage: "User with this email or phone number already exists",
             };
             return next();
         }
 
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         const newUser: IUserModel = new db.models[COLLECTIONS.USER]({
             name,
+            email: email?.toLowerCase?.(),
+            password: hashedPassword,
             countryCode,
             phone,
             address,
@@ -95,12 +98,35 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
     try {
         const db = req.db;
-        const updateData = req.body;
+        const updateData = { ...req.body } as Partial<IUser>;
+
+        if (updateData.email) {
+            updateData.email = updateData.email.toLowerCase();
+            const emailClash = await db.models[COLLECTIONS.USER].findOne({
+                _id: { $ne: id },
+                email: updateData.email,
+                isDeleted: false,
+            });
+            if (emailClash) {
+                req.apiStatus = {
+                    isSuccess: false,
+                    message: "User with this email already exists",
+                    status: 409,
+                    data: {},
+                    toastMessage: "User with this email already exists",
+                };
+                return next();
+            }
+        }
+
+        if (updateData.password) {
+            updateData.password = await bcrypt.hash(updateData.password, 10);
+        }
 
         const updatedUser = await db.models[COLLECTIONS.USER].findOneAndUpdate(
             { _id: id, isDeleted: false },
             { $set: updateData },
-            { new: true },
+            { new: true, projection: { password: 0 } },
         );
 
         if (!updatedUser) {

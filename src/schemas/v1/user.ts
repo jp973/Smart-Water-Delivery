@@ -3,6 +3,8 @@ import { z } from "zod";
 export const createUserSchema = z.object({
     body: z.object({
         name: z.string().trim().min(1, "Name is required"),
+        email: z.string().trim().email("Valid email is required"),
+        password: z.string().min(6, "Password must be at least 6 characters"),
         countryCode: z.string().trim().min(1, "Country code is required"),
         phone: z.string().trim().min(10, "Phone number must be at least 10 digits"),
         address: z.object({
@@ -24,6 +26,8 @@ export const updateUserSchema = z.object({
     }),
     body: z.object({
         name: z.string().trim().min(1, "Name cannot be empty").optional(),
+        email: z.string().trim().email("Valid email is required").optional(),
+        password: z.string().min(6, "Password must be at least 6 characters").optional(),
         countryCode: z.string().trim().min(1, "Country code is required").optional(),
         phone: z.string().trim().min(10, "Phone number must be at least 10 digits").optional(),
         address: z.object({

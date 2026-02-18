@@ -18,14 +18,13 @@ import { addJson, findJsonInJsonArray } from "../../utils/v1/helper";
  *           type: string
  *           description: Name of the admin
  *           example: "Admin User"
- *         phone:
+ *         email:
  *           type: string
- *           description: Phone number of the admin
- *           example: "9876543210"
- *         countryCode:
+ *           description: Email of the admin
+ *           example: "admin@example.com"
+ *         password:
  *           type: string
- *           description: Country code for the phone number
- *           example: "91"
+ *           description: Hashed password of the admin (never returned in responses)
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -40,8 +39,8 @@ import { IAdmin, IAdminModel } from "../../utils/v1/customTypes";
 
 export const AdminSchema: Schema = new Schema(
   {
-    phone: { type: String, required: true, trim: true },
-    countryCode: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    password: { type: String, required: true },
     name: { type: String, required: false, trim: true, default: "" },
   },
   {
@@ -50,7 +49,6 @@ export const AdminSchema: Schema = new Schema(
   } as SchemaOptions,
 );
 
-AdminSchema.index({ countryCode: 1, phone: 1 }, { unique: true });
 AdminSchema.set("toObject", { virtuals: true });
 AdminSchema.set("toJSON", { virtuals: true });
 

@@ -1,128 +1,27 @@
 import { Request, Response, NextFunction } from "express";
-import { getMessagingService } from "../../../services/v1/message";
-import { COLLECTIONS, CONSTANTS, USER_ROLES } from "../../../utils/v1/constants";
+import { COLLECTIONS, USER_ROLES } from "../../../utils/v1/constants";
 import { logger } from "../../../utils/v1/logger";
-import { generateOtp } from "../../../utils/v1/helper";
 import jwt from "jsonwebtoken";
 import { config } from "../../../config/v1/config";
-import mongoose, { Types } from "mongoose";
-import { IArea, IUser } from "../../../utils/v1/customTypes";
+import bcrypt from "bcryptjs";
+import { generateOtp } from "../../../utils/v1/helper";
+import { sendEmail } from "../../../services/v1/email";
 
 const userAuthLogger = logger.child({ module: "userAuth" });
 
-interface AggregatedUser extends IUser {
-    _id: Types.ObjectId;
-    areaId?: IArea;
-}
+const normalizeEmail = (value: unknown): string =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+const normalizePassword = (value: unknown): string => (typeof value === "string" ? value : "");
+const normalizeName = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
-export const sendUserOTP = async (req: Request, res: Response, next: NextFunction) => {
-    const txId: string = req.txnId || "";
-    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
-    const actionLogger = userAuthLogger.child({ action: "sendUserOTP", txId, requestPath });
-
-    actionLogger.info("Processing user OTP send request");
-
-    try {
-        const rawCountryCode = typeof req.body.countryCode === "string" ? req.body.countryCode.trim() : "";
-        const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim() : "";
-
-        const db = req.db;
-
-        // Normalize country code for search
-        const countryCodeWithPlus = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
-        const countryCodeWithoutPlus = rawCountryCode.startsWith("+") ? rawCountryCode.substring(1) : rawCountryCode;
-
-        // Check if user exists and profile is completed
-        const user = await db.models[COLLECTIONS.USER].findOne({
-            countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus] },
-            phone: rawPhone,
-            isDeleted: false,
-        });
-
-        if (!user || !user.name) {
-            req.apiStatus = {
-                isSuccess: false,
-                message: "User not registered",
-                status: 404,
-                data: {},
-                toastMessage: "User not registered, please register first",
-            };
-            actionLogger.info(`User not found or profile incomplete for ${rawCountryCode}${rawPhone}`);
-            return next();
-        }
-
-        // Check if OTP was recently sent (cooldown period)
-        const existingOtp = await db.models[COLLECTIONS.OTP].findOne({
-            countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus] },
-            phone: rawPhone,
-        });
-
-        if (existingOtp?.createdAt) {
-            const timeDiff = Math.abs(Date.now() - existingOtp.createdAt.getTime());
-            const diffSeconds = Math.floor(timeDiff / 1000);
-            if (diffSeconds < CONSTANTS.MIN_RESEND_INTERVAL_IN_SECONDS) {
-                req.apiStatus = {
-                    isSuccess: false,
-                    message: "OTP already sent",
-                    status: 400,
-                    data: {},
-                    toastMessage: "OTP already sent",
-                };
-                actionLogger.info("OTP already sent recently; blocking resend");
-                return next();
-            }
-        }
-
-
-        try {
-            // Delete any existing OTPs for this phone number
-            await db.models[COLLECTIONS.OTP].deleteMany({
-                countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus] },
-                phone: rawPhone,
-            });
-
-            // Generate OTP
-            const otpValue = config.ENVIRONMENT === "development" ? "1234" : generateOtp();
-
-            // Create new OTP record
-            // Store with the format provided in the request to maintain consistency with verify process
-            const otpDoc = await db.models[COLLECTIONS.OTP].create({
-                countryCode: rawCountryCode,
-                phone: rawPhone,
-                otp: otpValue,
-            });
-
-            // Send OTP via messaging service
-            const messagingServiceModule = await getMessagingService();
-            await messagingServiceModule.sendOTP(rawPhone, rawCountryCode, otpDoc.otp ?? "");
-
-            req.apiStatus = {
-                isSuccess: true,
-                message: "success",
-                status: 200,
-                data: "OTP sent successfully",
-                toastMessage: "OTP sent",
-            };
-            actionLogger.info("User OTP sent successfully");
-        } catch (error) {
-
-            actionLogger.error({ err: error }, "Error in OTP send process");
-            throw error;
-        }
-
-
-        return next();
-    } catch (error) {
-        actionLogger.error({ err: error }, "Failed to send admin OTP");
-        req.apiStatus = {
-            isSuccess: false,
-            message: "Error sending OTP",
-            status: 500,
-            data: {},
-            toastMessage: "Error sending OTP",
-        };
-        return next();
-    }
+const buildTokens = (payload: object) => {
+    const accessToken = jwt.sign(payload, config.JWT_SECRET_KEY, {
+        expiresIn: `${config.ACCESS_TOKEN_EXPIRY}m`,
+    });
+    const refreshToken = jwt.sign(payload, config.JWT_SECRET_KEY, {
+        expiresIn: `${config.REFRESH_TOKEN_EXPIRY}d`,
+    });
+    return { accessToken, refreshToken };
 };
 
 export const registerUser = async (req: Request, res: Response, next: NextFunction) => {
@@ -130,34 +29,39 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
     const actionLogger = userAuthLogger.child({ action: "registerUser", txId });
 
     try {
-        const { name, countryCode, phone, address, waterQuantity, notes } = req.body;
+        const { name, email, password, countryCode, phone, address, waterQuantity, notes } = req.body;
         const db = req.db;
 
-        // Check for duplicate phone & countryCode
+        const normalizedEmail = normalizeEmail(email);
+
         const existingUser = await db.models[COLLECTIONS.USER].findOne({
-            countryCode,
-            phone,
+            $or: [{ email: normalizedEmail }, { phone, countryCode }],
             isDeleted: false,
         });
 
         if (existingUser) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "User with this phone number already exists",
+                message: "User with this email or phone already exists",
                 status: 409,
                 data: {},
-                toastMessage: "User with this phone number already exists",
+                toastMessage: "User with this email or phone already exists",
             };
             return next();
         }
 
+        const hashedPassword = await bcrypt.hash(normalizePassword(password), 10);
+
         const newUser = new db.models[COLLECTIONS.USER]({
             name,
+            email: normalizedEmail,
+            password: hashedPassword,
             countryCode,
             phone,
             address,
             waterQuantity,
             notes,
+            isVerified: true,
         });
 
         await newUser.save();
@@ -185,150 +89,106 @@ export const registerUser = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
-export const verifyUserOTP = async (req: Request, res: Response, next: NextFunction) => {
+export const loginUser = async (req: Request, res: Response, next: NextFunction) => {
     const txId: string = req.txnId || "";
     const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
-    const actionLogger = userAuthLogger.child({ action: "verifyUserOTP", txId, requestPath });
+    const actionLogger = userAuthLogger.child({ action: "loginUser", txId, requestPath });
 
-    actionLogger.info("Verifying user OTP");
+    actionLogger.info("Processing user email/password login request");
 
     try {
-        const rawCountryCode = typeof req.body.countryCode === "string" ? req.body.countryCode.trim() : "";
-        const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim() : "";
-        const rawOtp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+        const email = normalizeEmail(req.body.email);
+        const password = normalizePassword(req.body.password);
 
-        const db = req.db;
-
-        // Find OTP document
-        // Normalize country code for search
-        const countryCodeWithPlus = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
-        const countryCodeWithoutPlus = rawCountryCode.startsWith("+") ? rawCountryCode.substring(1) : rawCountryCode;
-
-        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({
-            countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus, rawCountryCode] },
-            phone: rawPhone,
-            otp: rawOtp,
-        });
-
-        if (!otpDoc) {
+        if (!email || !password) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "Invalid OTP",
+                message: "Email and password are required",
                 status: 400,
                 data: {},
-                toastMessage: "Invalid OTP",
+                toastMessage: "Email and password are required",
             };
-            actionLogger.warn("Invalid OTP provided");
             return next();
         }
 
-        const jwtSecret = config.JWT_SECRET_KEY;
+        const db = req.db;
+        const user = await db.models[COLLECTIONS.USER].findOne({ email, isDeleted: false });
 
-        try {
-            // Delete the used OTP
-            await db.models[COLLECTIONS.OTP].deleteMany({
-                countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus, rawCountryCode] },
-                phone: rawPhone,
-            });
-
-            // Check if user exists
-            const user = await db.models[COLLECTIONS.USER].findOne({
-                countryCode: { $in: [countryCodeWithPlus, countryCodeWithoutPlus, rawCountryCode] },
-                phone: rawPhone,
-                isDeleted: false,
-            });
-
-            if (!user) {
-                req.apiStatus = {
-                    isSuccess: false,
-                    message: "User not found",
-                    status: 404,
-                    data: {},
-                    toastMessage: "User not found. Please register first.",
-                };
-                actionLogger.warn("User not found during OTP verification");
-                return next();
-            }
-
-            // Generate JWT tokens
-            const accessToken = jwt.sign(
-                {
-                    id: user._id,
-                    role: USER_ROLES.USER,
-                    phone: rawPhone,
-                    countryCode: rawCountryCode,
-                },
-                jwtSecret,
-                {
-                    expiresIn: `${config.ACCESS_TOKEN_EXPIRY}m`,
-                },
-            );
-
-            const refreshToken = jwt.sign(
-                {
-                    id: user._id,
-                    role: USER_ROLES.USER,
-                    phone: rawPhone,
-                    countryCode: rawCountryCode,
-                },
-                jwtSecret,
-                {
-                    expiresIn: `${config.REFRESH_TOKEN_EXPIRY}d`,
-                },
-            );
-
-            // Delete existing tokens for this user
-            await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
-                userId: user._id,
-                role: USER_ROLES.USER,
-            });
-
-            await db.models[COLLECTIONS.REFRESH_TOKEN].deleteMany({
-                userId: user._id,
-                role: USER_ROLES.USER,
-            });
-
-            // Create new access token record
-            await db.models[COLLECTIONS.ACCESS_TOKEN].create({
-                token: accessToken,
-                userId: user._id,
-                role: USER_ROLES.USER,
-            });
-
-            // Create new refresh token record
-            await db.models[COLLECTIONS.REFRESH_TOKEN].create({
-                token: refreshToken,
-                userId: user._id,
-                role: USER_ROLES.USER,
-            });
-
+        if (!user) {
             req.apiStatus = {
-                isSuccess: true,
-                message: "OTP verified successfully",
-                status: 200,
-                data: {
-                    isVerified: true,
-                    accessToken,
-                    refreshToken,
-                    expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
-                },
-                toastMessage: "OTP verified",
+                isSuccess: false,
+                message: "Invalid credentials",
+                status: 401,
+                data: {},
+                toastMessage: "Invalid credentials",
             };
-            actionLogger.info("User OTP verified successfully");
-        } catch (error) {
-            actionLogger.error({ err: error }, "Error in OTP verification process");
-            throw error;
+            actionLogger.warn("User not found for provided email");
+            return next();
         }
 
+        const passwordMatches = await bcrypt.compare(password, user.password);
+        if (!passwordMatches) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Invalid credentials",
+                status: 401,
+                data: {},
+                toastMessage: "Invalid credentials",
+            };
+            actionLogger.warn("Invalid password for user");
+            return next();
+        }
+
+        const { accessToken, refreshToken } = buildTokens({
+            id: user._id,
+            role: USER_ROLES.USER,
+            email: user.email,
+        });
+
+        await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
+            userId: user._id,
+            role: USER_ROLES.USER,
+        });
+        await db.models[COLLECTIONS.REFRESH_TOKEN].deleteMany({
+            userId: user._id,
+            role: USER_ROLES.USER,
+        });
+
+        await db.models[COLLECTIONS.ACCESS_TOKEN].create({
+            token: accessToken,
+            userId: user._id,
+            role: USER_ROLES.USER,
+        });
+        await db.models[COLLECTIONS.REFRESH_TOKEN].create({
+            token: refreshToken,
+            userId: user._id,
+            role: USER_ROLES.USER,
+        });
+
+        req.apiStatus = {
+            isSuccess: true,
+            message: "Login successful",
+            status: 200,
+            data: {
+                isVerified: true,
+                accessToken,
+                refreshToken,
+                expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
+                email: user.email,
+                name: user.name,
+            },
+            toastMessage: "Logged in",
+        };
+        actionLogger.info("User login successful");
         return next();
     } catch (error) {
-        actionLogger.error({ err: error }, "Failed to verify user OTP");
+        actionLogger.error({ err: error }, "Failed to process user login");
         req.apiStatus = {
             isSuccess: false,
-            message: "Error verifying OTP",
+            message: "Error logging in",
             status: 500,
             data: {},
-            toastMessage: "Error verifying OTP",
+            toastMessage: "Error logging in",
         };
         return next();
     }
@@ -359,25 +219,7 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
         const db = req.db;
         const jwtSecret = config.JWT_SECRET_KEY;
 
-        if (!jwtSecret) {
-            actionLogger.error("JWT secret key is not configured");
-            req.apiStatus = {
-                isSuccess: false,
-                message: "Error refreshing access token",
-                status: 500,
-                data: {},
-                toastMessage: "Error refreshing access token",
-            };
-            return next();
-        }
-
-        // Verify JWT token signature and expiry
-        let decodedToken: {
-            id: string;
-            role: string;
-            phone?: string;
-            countryCode?: string;
-        };
+        let decodedToken: { id: string; role: string; email?: string };
 
         try {
             const verified = jwt.verify(rawRefreshToken, jwtSecret);
@@ -385,7 +227,6 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
             actionLogger.info("JWT verification successful");
         } catch (jwtError: unknown) {
             let errorMessage = "Refresh token invalid or expired";
-
             if (jwtError instanceof Error) {
                 errorMessage =
                     jwtError.name === "TokenExpiredError"
@@ -407,7 +248,6 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
             return next();
         }
 
-        // Verify token role matches user role
         if (decodedToken.role !== USER_ROLES.USER) {
             actionLogger.warn("Refresh token role mismatch");
             req.apiStatus = {
@@ -420,10 +260,8 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
             return next();
         }
 
-        // Check if token exists in database
         const tokenFromDb = await db.models[COLLECTIONS.REFRESH_TOKEN].findOne({
             token: rawRefreshToken,
-            role: USER_ROLES.USER,
         });
 
         if (!tokenFromDb) {
@@ -438,7 +276,6 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
             return next();
         }
 
-        // Verify userId from JWT matches userId in database
         const jwtUserId = decodedToken.id?.toString();
         const dbUserId = tokenFromDb.userId?.toString();
 
@@ -455,13 +292,11 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
         }
 
         try {
-            // Delete existing access tokens for this user
             await db.models[COLLECTIONS.ACCESS_TOKEN].deleteMany({
                 userId: tokenFromDb.userId,
                 role: USER_ROLES.USER,
             });
 
-            // Get user details
             const user = await db.models[COLLECTIONS.USER].findOne({ _id: tokenFromDb.userId });
 
             if (!user) {
@@ -476,13 +311,11 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
                 return next();
             }
 
-            // Generate new access token
             const accessToken = jwt.sign(
                 {
                     id: tokenFromDb.userId,
                     role: USER_ROLES.USER,
-                    phone: user.phone,
-                    countryCode: user.countryCode,
+                    email: user.email,
                 },
                 jwtSecret,
                 {
@@ -490,7 +323,6 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
                 },
             );
 
-            // Create new access token record
             await db.models[COLLECTIONS.ACCESS_TOKEN].create({
                 token: accessToken,
                 userId: tokenFromDb.userId,
@@ -505,6 +337,8 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
                     accessToken,
                     refreshToken: rawRefreshToken,
                     expiryTime: new Date(Date.now() + config.ACCESS_TOKEN_EXPIRY * 60 * 1000),
+                    email: user.email,
+                    name: user.name,
                 },
                 toastMessage: "Token refreshed",
             };
@@ -582,31 +416,219 @@ export const logoutUser = async (req: Request, res: Response, next: NextFunction
     }
 };
 
-export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
+export const sendForgotPasswordOTP = async (req: Request, res: Response, next: NextFunction) => {
     const txId: string = req.txnId || "";
-    const userId = req.user?._id;
-    const actionLogger = userAuthLogger.child({ action: "updateUserProfile", txId, userId });
+    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
+    const actionLogger = userAuthLogger.child({ action: "sendForgotPasswordOTP", txId, requestPath });
+
+    actionLogger.info("Processing forgot password OTP send request");
 
     try {
+        const email = normalizeEmail(req.body.email);
         const db = req.db;
-        const updateData = req.body;
+
+        const user = await db.models[COLLECTIONS.USER].findOne({ email, isDeleted: false });
+        if (!user) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "User not found",
+                status: 404,
+                data: {},
+                toastMessage: "User not found",
+            };
+            actionLogger.warn("User not found for forgot password");
+            return next();
+        }
+
+        await db.models[COLLECTIONS.OTP].deleteMany({ email });
+
+        const otpValue = config.ENVIRONMENT === "development" ? "1234" : generateOtp();
+        const otpDoc = await db.models[COLLECTIONS.OTP].create({
+            email,
+            otp: otpValue,
+        });
+        console.log(`sending OTP email to ${email} with OTP: ${otpDoc.otp}`);
+        await sendEmail(email, "Password reset OTP", `Your OTP is ${otpDoc.otp}`);
+        console.log(`OTP for ${email}: ${otpDoc.otp}`);
+
+        req.apiStatus = {
+            isSuccess: true,
+            message: "success",
+            status: 200,
+            data: "OTP sent successfully",
+            toastMessage: "OTP sent",
+        };
+        actionLogger.info("Forgot password OTP sent successfully");
+        return next();
+    } catch (error) {
+        actionLogger.error({ err: error }, "Failed to send forgot password OTP");
+        req.apiStatus = {
+            isSuccess: false,
+            message: "Error sending OTP",
+            status: 500,
+            data: {},
+            toastMessage: "Error sending OTP",
+        };
+        return next();
+    }
+};
+
+export const verifyForgotPasswordOTP = async (req: Request, res: Response, next: NextFunction) => {
+    const txId: string = req.txnId || "";
+    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
+    const actionLogger = userAuthLogger.child({ action: "verifyForgotPasswordOTP", txId, requestPath });
+
+    actionLogger.info("Verifying forgot password OTP");
+
+    try {
+        const email = normalizeEmail(req.body.email);
+        const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+        const db = req.db;
+
+        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({
+            email,
+            otp,
+        });
+
+        if (!otpDoc) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Invalid OTP",
+                status: 400,
+                data: {},
+                toastMessage: "Invalid OTP",
+            };
+            actionLogger.warn("Invalid OTP for forgot password");
+            return next();
+        }
+
+        await db.models[COLLECTIONS.OTP].updateOne({ _id: otpDoc._id }, { $set: { isVerified: true } });
+
+        req.apiStatus = {
+            isSuccess: true,
+            message: "OTP verified successfully",
+            status: 200,
+            data: { isVerified: true },
+            toastMessage: "OTP verified",
+        };
+        actionLogger.info("Forgot password OTP verified successfully");
+        return next();
+    } catch (error) {
+        actionLogger.error({ err: error }, "Failed to verify forgot password OTP");
+        req.apiStatus = {
+            isSuccess: false,
+            message: "Error verifying OTP",
+            status: 500,
+            data: {},
+            toastMessage: "Error verifying OTP",
+        };
+        return next();
+    }
+};
+
+export const updatePasswordWithOTP = async (req: Request, res: Response, next: NextFunction) => {
+    const txId: string = req.txnId || "";
+    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
+    const actionLogger = userAuthLogger.child({ action: "updatePasswordWithOTP", txId, requestPath });
+
+    actionLogger.info("Updating password using OTP");
+
+    try {
+        const email = normalizeEmail(req.body.email);
+        const newPasswordRaw = normalizePassword(req.body.newPassword);
+
+        const db = req.db;
+
+        const otpDoc = await db.models[COLLECTIONS.OTP].findOne({ email, isVerified: true });
+
+        if (!otpDoc) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "Email not verified or OTP session expired",
+                status: 400,
+                data: {},
+                toastMessage: "Email not verified or OTP session expired",
+            };
+            actionLogger.warn("Verified OTP not found for password update");
+            return next();
+        }
+
+        const user = await db.models[COLLECTIONS.USER].findOne({ email, isDeleted: false });
+
+        if (!user) {
+            req.apiStatus = {
+                isSuccess: false,
+                message: "User not found",
+                status: 404,
+                data: {},
+                toastMessage: "User not found",
+            };
+            actionLogger.warn("User not found during password reset");
+            return next();
+        }
+
+        const hashedPassword = await bcrypt.hash(newPasswordRaw, 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        await db.models[COLLECTIONS.OTP].deleteMany({ email });
+
+        req.apiStatus = {
+            isSuccess: true,
+            message: "Password updated successfully",
+            status: 200,
+            data: {},
+            toastMessage: "Password updated",
+        };
+        actionLogger.info("Password updated via OTP");
+        return next();
+    } catch (error) {
+        actionLogger.error({ err: error }, "Failed to update password via OTP");
+        req.apiStatus = {
+            isSuccess: false,
+            message: "Failed to update password",
+            status: 500,
+            data: {},
+            toastMessage: "Failed to update password",
+        };
+        return next();
+    }
+};
+
+export const updateUserProfile = async (req: Request, res: Response, next: NextFunction) => {
+    const txId: string = req.txnId || "";
+    const requestPath = `${req.baseUrl || ""}${req.path || ""}`;
+    const actionLogger = userAuthLogger.child({ action: "updateUserProfile", txId, requestPath });
+
+    actionLogger.info("Processing user profile update request");
+
+    try {
+        const userId = req.user?._id;
 
         if (!userId) {
             req.apiStatus = {
                 isSuccess: false,
-                message: "Unauthorized",
+                message: "Unauthorized access. Please login again.",
                 status: 401,
                 data: {},
-                toastMessage: "Unauthorized",
+                toastMessage: "Unauthorized access. Please login again.",
             };
+            actionLogger.warn("Profile update attempted without authenticated user");
             return next();
         }
 
-        const updatedUser = await db.models[COLLECTIONS.USER].findOneAndUpdate(
-            { _id: userId, isDeleted: false },
-            { $set: updateData },
-            { new: true },
-        ).lean();
+        const db = req.db;
+        const payload = req.body;
+
+        // prevent email/password updates here
+        delete payload.email;
+        delete payload.password;
+
+        const updatedUser = await db.models[COLLECTIONS.USER].findByIdAndUpdate(
+            userId,
+            { $set: payload },
+            { new: true, projection: { password: 0 } },
+        );
 
         if (!updatedUser) {
             req.apiStatus = {
@@ -616,43 +638,27 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
                 data: {},
                 toastMessage: "User not found",
             };
+            actionLogger.warn("User not found for profile update");
             return next();
         }
 
-        // Fetch fully aggregated user data
-        const results = await db.models[COLLECTIONS.USER].aggregate([
-            { $match: { _id: new Types.ObjectId(userId as string), isDeleted: false } },
-            {
-                $lookup: {
-                    from: COLLECTIONS.AREA,
-                    localField: "address.area",
-                    foreignField: "_id",
-                    as: "areaId"
-                }
-            },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
-        ]) as AggregatedUser[];
-
-        const finalUser = results.length > 0 ? results[0] : null;
-
         req.apiStatus = {
             isSuccess: true,
-            message: "Profile updated successfully",
+            message: "success",
             status: 200,
-            data: finalUser,
+            data: updatedUser,
             toastMessage: "Profile updated successfully",
         };
-
         actionLogger.info("User profile updated successfully");
         return next();
     } catch (error) {
         actionLogger.error({ err: error }, "Failed to update user profile");
         req.apiStatus = {
             isSuccess: false,
-            message: "Failed to update user profile",
+            message: "Something went wrong. Please try again later.",
             status: 500,
             data: {},
-            toastMessage: "Failed to update user profile",
+            toastMessage: "Something went wrong. Please try again later.",
         };
         return next();
     }
@@ -677,20 +683,25 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
             return next();
         }
 
-        const results = await db.models[COLLECTIONS.USER].aggregate([
-            { $match: { _id: new Types.ObjectId(userId as string), isDeleted: false } },
+        const userWithArea = await db.models[COLLECTIONS.USER].aggregate([
+            { $match: { _id: userId, isDeleted: false } },
             {
                 $lookup: {
                     from: COLLECTIONS.AREA,
                     localField: "address.area",
                     foreignField: "_id",
-                    as: "areaId"
-                }
+                    as: "areaData",
+                },
             },
-            { $unwind: { path: "$areaId", preserveNullAndEmptyArrays: true } }
-        ]) as AggregatedUser[];
+            {
+                $addFields: {
+                    areaId: { $arrayElemAt: ["$areaData", 0] },
+                },
+            },
+            { $project: { password: 0, areaData: 0 } },
+        ]);
 
-        const user = results.length > 0 ? results[0] : null;
+        const user = userWithArea[0];
 
         if (!user) {
             req.apiStatus = {
