@@ -28,6 +28,21 @@ if (process.env.NODE_ENV !== "test") {
 
 const app = express();
 
+// MiddleWare to ensure DB is connected (Important for Serverless like Vercel)
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { dbConnections, initializeAllDBConnections } = await import("./db/connection");
+    if (!dbConnections.main) {
+      await initializeAllDBConnections();
+    }
+    req.db = dbConnections.main; // Default to main
+    next();
+  } catch (err) {
+    console.error("DB Initialization Error:", err);
+    res.status(500).json({ message: "Internal Server Error: Database connection failed" });
+  }
+});
+
 app.use(rateLimit({ windowMs: 1 * 5 * 1000, max: 1500, standardHeaders: true, legacyHeaders: false }));
 app.set("port", port);
 app.use(express.json());
@@ -73,7 +88,8 @@ app.use(function (req: Request, res: Response, next: NextFunction): void {
   next(err);
 });
 
-if (process.env.NODE_ENV !== "test") {
+// Skip app.listen when running on Vercel as a serverless function
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
   app.listen(port, () => {
     console.info(`Server is running on port ${port} in ${app.get("env")} mode`);
   });
