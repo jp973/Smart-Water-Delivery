@@ -313,8 +313,6 @@ router.get(
  *   post:
  *     summary: Get all areas with filters, pagination, and search
  *     tags: [Admin/Areas]
- *     security:
- *       - adminBearerAuth: []
  *     requestBody:
  *       content:
  *         application/json:
@@ -434,7 +432,6 @@ router.post(
     "/getAll",
     entryPoint,
     dbSelector,
-    adminAuthenticator,
     validate(getAllAreaSchema),
     getAllArea,
     exitPoint,

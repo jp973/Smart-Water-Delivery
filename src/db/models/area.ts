@@ -71,7 +71,6 @@ export const AreaSchema: Schema = new Schema(
 
 AreaSchema.set("toObject", { virtuals: true });
 AreaSchema.set("toJSON", { virtuals: true });
-AreaSchema.index({ _id: 1 }, { unique: true });
 
 export const AreaModel: Model<IAreaModel> = model<IAreaModel>(COLLECTIONS.AREA, AreaSchema);
 

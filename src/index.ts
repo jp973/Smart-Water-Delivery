@@ -32,9 +32,12 @@ const app = express();
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { dbConnections, initializeAllDBConnections } = await import("./db/connection");
-    if (!dbConnections.main) {
+
+    // Check if connection exists AND is connected (readyState 1)
+    if (!dbConnections.main || dbConnections.main.readyState !== 1) {
       await initializeAllDBConnections();
     }
+
     req.db = dbConnections.main; // Default to main
     next();
   } catch (err) {

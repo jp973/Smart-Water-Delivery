@@ -8,8 +8,7 @@ export const initializeSeed = async () => {
   const correlationId = `seed-${Date.now()}`;
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
+    // Check if main connection exists and is ready
     if (!dbConnections.main) {
       logger.warn({ correlationId }, "Main database connection not available for seeding");
       return;

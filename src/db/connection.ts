@@ -29,13 +29,18 @@ export const dbConnections: DBConnections = {
 let initializationPromise: Promise<void> | null = null;
 
 export async function initializeAllDBConnections() {
-  if (dbConnections.main) return;
-  if (initializationPromise) return initializationPromise;
+  if (dbConnections.main && dbConnections.main.readyState === 1) return;
+  if (initializationPromise) {
+    await initializationPromise;
+    if (dbConnections.main && dbConnections.main.readyState === 1) return;
+  }
 
   initializationPromise = (async () => {
     console.log("Initializing all DB connections...");
     const mainConn = await mongoose.createConnection(config.MONGODB_URI, {
       serverSelectionTimeoutMS: CONSTANTS.MONGODB_RECONNECT_INTERVAL,
+      connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
+      socketTimeoutMS: 45000,  // Close sockets after 45 seconds of inactivity
     });
     await registerAllModels(mainConn);
 
